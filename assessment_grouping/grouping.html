@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Group Assignment</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="grouping.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="pageTitle">Student Group Assignment</h1>
+            <button class="back-btn" onclick="goBack()">← Back to Selection</button>
+        </div>
+
+        <div id="loadingView" class="view active">
+            <div class="loading">Loading grouping data...</div>
+        </div>
+
+        <div id="errorView" class="view">
+            <div class="error" id="errorMessage"></div>
+        </div>
+
+        <div id="completedView" class="view">
+            <div class="completed-badge">✓ GROUPING COMPLETED</div>
+            <div class="completed-info" id="completedInfo"></div>
+            <div id="completedGroupsContainer"></div>
+            <div id="completedUnassignedContainer"></div>
+        </div>
+
+        <div id="interactiveView" class="view">
+            <div class="progress-bar">
+                <div id="progressInfo"></div>
+            </div>
+
+            <!-- NEW STRUCTURE: Section header with create button -->
+            <div class="section-header">
+                <h2 class="section-title">Groups</h2>
+                <button class="btn-create-group" onclick="openCreateGroupModal()">
+                    <span>+</span> Create Group
+                </button>
+            </div>
+            
+            <!-- NEW: Grid layout for group cards -->
+            <div class="groups-grid" id="groupsContainer"></div>
+
+            <div class="unassigned-section">
+                <h2 class="section-title">Unassigned Students</h2>
+                <div id="unassignedStudents"></div>
+            </div>
+
+            <div class="submit-section" id="submitSection" style="display: none;">
+                <h3>✓ All students are assigned or have remarks!</h3>
+                <p style="margin-bottom: 15px; color: #00563f;">All groups have incharges assigned. Ready to submit.</p>
+                <button class="btn btn-primary" onclick="submitData()">Submit Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UPDATED: Combined Create/Edit Group Modal -->
+    <div id="createGroupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Create New Group</h2>
+                <span class="close" onclick="closeModal('createGroupModal')">&times;</span>
+            </div>
+            
+            <div class="form-group" id="topicFormGroup">
+                <label>Select Topic:</label>
+                <select id="topicSelect">
+                    <option value="">-- Select Topic --</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Select Students (3 to 8):</label>
+                <div id="studentCounter" class="student-counter">Selected: 0/8 students</div>
+                <div class="checkbox-group" id="studentCheckboxes"></div>
+            </div>
+            
+            <!-- Incharge selection now done via star buttons in group cards
+            <div class="form-group">
+                <label>Select Group Incharge:</label>
+                <select id="inchargeSelect">
+                    <option value="">-- Select Incharge --</option>
+                </select>
+            </div>
+            -->
+            
+            <button class="btn btn-primary" id="saveGroupBtn" onclick="saveGroup()">Save Group</button>
+        </div>
+    </div>
+
+    <!-- Remarks Modal (unchanged) -->
+    <div id="remarksModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Remarks</h2>
+                <span class="close" onclick="closeModal('remarksModal')">&times;</span>
+            </div>
+            <p style="margin-bottom: 15px;"><strong id="remarkStudentInfo"></strong></p>
+            <div class="form-group">
+                <label>Remarks:</label>
+                <textarea id="remarksText" placeholder="Enter remarks for this student..."></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="saveRemarks()">Save Remarks</button>
+        </div>
+    </div>
+
+<script src="grouping.js"></script>
+</body>
+</html>

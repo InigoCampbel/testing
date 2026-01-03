@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Department</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="department_selection_styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div class="user-details">
+                <h3 id="userName">Loading...</h3>
+                <p id="userVendor">-</p>
+            </div>
+        </div>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+    </div>
+
+    <div class="container">
+        <div class="back-button" id="backBtn">
+            <span>←</span> Back to Assessment Selection
+        </div>
+
+        <div class="page-header">
+            <h1>Select Department</h1>
+            <p class="subtitle" id="assessmentTypeDisplay">Loading...</p>
+        </div>
+
+        <div id="errorDiv" class="error" style="display: none;"></div>
+        <div id="loadingDiv" class="loading">Loading departments...</div>
+
+        <!-- Search Bar -->
+        <div class="search-container" id="searchContainer" style="display: none;">
+            <input 
+                type="text" 
+                id="departmentSearch" 
+                class="search-input" 
+                placeholder="Search departments..."
+                autocomplete="off"
+            />
+            <span class="search-icon">🔍</span>
+        </div>
+
+        <div class="departments-grid" id="departmentsGrid" style="display: none;"></div>
+        
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <p>No departments found</p>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // STATE MANAGEMENT
+        // ========================================
+        const state = {
+            trainerId: null,
+            trainerName: null,
+            trainerVendor: null,
+            assessmentType: null,
+            departments: [],
+            filteredDepartments: []
+        };
+
+        // Assessment type display names
+        const assessmentTypeNames = {
+            'extempore': 'Extempore Evaluation',
+            'group_activity': 'I UG - Group Activity Evaluation',
+            'presentation': 'II UG - Presentation Evaluation'
+        };
+
+        // Assessment type routes
+        const assessmentTypeRoutes = {
+            'extempore': 'extempore_activity/extempore.html',
+            'group_activity': 'group_activity/group_activity.html',
+            'presentation': 'presentation/presentation.html'
+        };
+
+        // ========================================
+        // DOM ELEMENTS
+        // ========================================
+        const elements = {
+            backBtn: document.getElementById('backBtn'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            userAvatar: document.getElementById('userAvatar'),
+            userName: document.getElementById('userName'),
+            userVendor: document.getElementById('userVendor'),
+            loadingDiv: document.getElementById('loadingDiv'),
+            errorDiv: document.getElementById('errorDiv'),
+            searchContainer: document.getElementById('searchContainer'),
+            departmentSearch: document.getElementById('departmentSearch'),
+            departmentsGrid: document.getElementById('departmentsGrid'),
+            emptyState: document.getElementById('emptyState'),
+            assessmentTypeDisplay: document.getElementById('assessmentTypeDisplay')
+        };
+
+        // ========================================
+        // UTILITY FUNCTIONS
+        // ========================================
+
+        function showError(message) {
+            elements.errorDiv.textContent = message;
+            elements.errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                elements.errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            elements.loadingDiv.style.display = show ? 'block' : 'none';
+            elements.searchContainer.style.display = show ? 'none' : 'block';
+            elements.departmentsGrid.style.display = show ? 'none' : 'grid';
+        }
+
+        function getSessionData() {
+            state.trainerId = sessionStorage.getItem('trainerId');
+            state.trainerName = sessionStorage.getItem('trainerName');
+            state.trainerVendor = sessionStorage.getItem('trainerVendor');
+            state.assessmentType = sessionStorage.getItem('assessmentType');
+
+            if (!state.trainerId || !state.trainerName || !state.assessmentType) {
+                showError('Session expired. Please go back and try again.');
+                setTimeout(() => {
+                    window.location.href = 'selection.html';
+                }, 2000);
+                return false;
+            }
+
+            elements.userName.textContent = state.trainerName;
+            elements.userVendor.textContent = state.trainerVendor;
+            elements.userAvatar.textContent = state.trainerName.charAt(0).toUpperCase();
+            // Update subtitle with filter information
+            let subtitleText = `${assessmentTypeNames[state.assessmentType] || state.assessmentType}`;
+
+elements.assessmentTypeDisplay.textContent = subtitleText;
+
+            return true;
+        }
+
+        function storeSessionData(departmentId, departmentName, departmentYear) {
+            sessionStorage.setItem('selectedDepartmentId', departmentId);
+            sessionStorage.setItem('selectedDepartment', departmentName);
+            sessionStorage.setItem('selectedDepartmentYear', departmentYear);
+        }
+
+        // ========================================
+        // DATA LOADING
+        // ========================================
+
+        async function loadDepartments() {
+            try {
+                console.log('Loading departments for assessment type:', state.assessmentType);
+
+                const { data, error } = await supabaseClient
+                    .from('departments')
+                    .select('*')
+                    .order('name');
+
+                if (error) throw error;
+
+                // Apply assessment-specific filtering
+                let filteredData = data || [];
+
+                if (state.assessmentType === 'group_activity') {
+                    // Filter for I UG departments (department name starts with "I-")
+                    filteredData = filteredData.filter(dept => 
+                        dept.name.substring(0, 2).toUpperCase() === 'I '
+                    );
+                    console.log('Filtered for I UG departments:', filteredData.length);
+                } else if (state.assessmentType === 'presentation') {
+                    // Filter for II UG departments (department name starts with "II")
+                    filteredData = filteredData.filter(dept => 
+                        dept.name.substring(0, 2).toUpperCase() === 'II'
+                    );
+                    console.log('Filtered for II UG departments:', filteredData.length);
+                }
+                // For 'extempore', no filter - show all departments
+
+                state.departments = filteredData;
+                state.filteredDepartments = [...state.departments];
+
+                console.log('Total departments after filtering:', state.departments.length);
+
+                return state.departments;
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                throw error;
+            }
+        }
+
+        // ========================================
+        // RENDERING
+        // ========================================
+
+        function renderDepartments() {
+            elements.departmentsGrid.innerHTML = '';
+
+            if (state.filteredDepartments.length === 0) {
+                elements.departmentsGrid.style.display = 'none';
+                elements.emptyState.style.display = 'block';
+                return;
+            }
+
+            elements.departmentsGrid.style.display = 'grid';
+            elements.emptyState.style.display = 'none';
+
+            state.filteredDepartments.forEach(dept => {
+                const card = document.createElement('div');
+                card.className = 'department-card';
+                card.onclick = () => handleDepartmentSelection(dept);
+
+                card.innerHTML = `
+                    <div class="dept-name">${dept.name}</div>
+                `;
+
+                elements.departmentsGrid.appendChild(card);
+            });
+        }
+
+        function applySearch() {
+            const searchTerm = elements.departmentSearch.value.toLowerCase().trim();
+
+            state.filteredDepartments = state.departments.filter(dept => 
+                dept.name.toLowerCase().includes(searchTerm)
+            );
+
+            renderDepartments();
+        }
+
+        // ========================================
+        // NAVIGATION
+        // ========================================
+
+        function handleDepartmentSelection(department) {
+            console.log('Department selected:', department);
+            console.log('Assessment type:', state.assessmentType);
+
+            // Store department data AND assessment type
+            storeSessionData(department.id, department.name, department.year);
+            
+            // Keep assessment type in session for the assessment module to use if needed
+            sessionStorage.setItem('assessmentType', state.assessmentType);
+
+            // Navigate to appropriate assessment module
+            const route = assessmentTypeRoutes[state.assessmentType];
+            
+            if (route) {
+                window.location.href = route;
+            } else {
+                showError('Invalid assessment type');
+            }
+        }
+        async function handleLogout() {
+            try {
+                await supabaseClient.auth.signOut();
+                window.location.href = 'index.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                showError('Error logging out. Please try again.');
+            }
+        }
+
+        function handleBack() {
+            window.location.href = 'handover.html';
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+
+        elements.backBtn.addEventListener('click', handleBack);
+        elements.logoutBtn.addEventListener('click', handleLogout);
+        elements.departmentSearch.addEventListener('input', applySearch);
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+
+        async function initialize() {
+            try {
+                showLoading(true);
+
+                // Check authentication
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                
+                if (error || !session) {
+                    showError('Please login first');
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 2000);
+                    return;
+                }
+
+                // Get session data
+                if (!getSessionData()) return;
+
+                // Load departments
+                await loadDepartments();
+
+                // Render
+                renderDepartments();
+                showLoading(false);
+
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError('Error loading departments: ' + error.message);
+                showLoading(false);
+            }
+        }
+
+        initialize();
+    </script>
+</body>
+</html>

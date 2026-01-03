@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Under Construction</title>
+
+<style>
+    :root {
+        --primary: #6366f1;
+        --secondary: #f3f4f6;
+        --text-dark: #111827;
+        --text-light: #6b7280;
+    }
+
+    * {
+        box-sizing: border-box;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #eef2ff, #f8fafc);
+        padding: 16px;
+    }
+
+    .card {
+        background: white;
+        border-radius: 20px;
+        padding: 28px 24px;
+        max-width: 360px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        animation: fadeIn 0.6s ease;
+    }
+
+    .icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+    }
+
+    h1 {
+        font-size: 1.4rem;
+        color: var(--text-dark);
+        margin-bottom: 8px;
+    }
+
+    p {
+        font-size: 0.95rem;
+        color: var(--text-light);
+        margin-bottom: 18px;
+    }
+
+    .countdown {
+        font-size: 0.85rem;
+        color: var(--text-light);
+        margin-bottom: 16px;
+    }
+
+    button {
+        border: none;
+        outline: none;
+        background: var(--primary);
+        color: white;
+        padding: 12px 18px;
+        border-radius: 999px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="card">
+    <div class="icon">🚧</div>
+    <h1>This page is under construction</h1>
+    <p>We’re working on something awesome. You’ll be redirected shortly.</p>
+
+    <div class="countdown">
+        Redirecting in <span id="seconds">5</span> seconds…
+    </div>
+
+    <button onclick="goBack()">Go Back Now</button>
+</div>
+
+<script>
+    let seconds = 5;
+    const countdownEl = document.getElementById("seconds");
+
+    const timer = setInterval(() => {
+        seconds--;
+        countdownEl.textContent = seconds;
+
+        if (seconds <= 0) {
+            clearInterval(timer);
+            goBack();
+        }
+    }, 1000);
+
+    function goBack() {
+        window.location.href = "../handover.html";
+    }
+</script>
+
+</body>
+</html>

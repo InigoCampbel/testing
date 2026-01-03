@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extempore Evaluation</title>
+    <link rel="stylesheet" href="extempore.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button class="back-btn" id="backBtn">
+                <span>←</span> Back
+            </button>
+            <div class="header-info">
+                <h1>Extempore Evaluation</h1>
+                <p>Department: <strong id="departmentDisplay">-</strong></p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="trainer-info">
+                <div class="name" id="trainerName">-</div>
+            </div>
+            <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Messages -->
+        <div class="message success" id="successMessage"></div>
+        <div class="message error" id="errorMessage"></div>
+
+        <!-- Stats -->
+        <div class="stats-container" id="statsContainer">
+            <div class="stat-card total">
+                <div class="number" id="totalCount">0</div>
+                <div class="label">Total Students</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="number" id="completedCount">0</div>
+                <div class="label">Completed</div>
+            </div>
+            <div class="stat-card pending">
+                <div class="number" id="pendingCount">0</div>
+                <div class="label">Yet to Evaluate</div>
+            </div>
+            <div class="stat-card absent">
+                <div class="number" id="absentCount">0</div>
+                <div class="label">Not Completed</div>
+            </div>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="search-bar">
+            <div class="search-input-wrapper">
+                <input 
+                    type="text" 
+                    class="search-input" 
+                    id="searchInput" 
+                    placeholder="Search by name or roll number..."
+                >
+                <span class="search-icon">🔍</span>
+            </div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="completed">Completed</button>
+                <button class="filter-btn" data-filter="pending">Yet to Evaluate</button>
+                <button class="filter-btn" data-filter="absent">Not Completed</button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loadingDiv">Loading students...</div>
+
+        <!-- Students Grid -->
+        <div class="students-grid" id="studentsGrid" style="display: none;"></div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <h3>No students found</h3>
+        </div>
+    </div>
+
+    <!-- Evaluation Modal -->
+    <div class="modal" id="evaluationModal">
+        <div class="modal-content">
+            <div class="student-details">
+                <button class="close-modal" id="closeModal">×</button>
+                <h3 id="modalStudentName">-</h3>
+                <p id="modalStudentRoll">Roll Number: -</p>
+            </div>
+
+            <!-- Tabs -->
+            <div class="form-tabs">
+                <button class="tab-btn active" data-tab="scores">Record Scores</button>
+                <button class="tab-btn" data-tab="absent">Not Completed</button>
+            </div>
+
+            <!-- Scores Tab -->
+            <div class="tab-content active" id="scoresTab">
+                <form id="scoresForm">
+                    <div class="score-input-group">
+                        <div class="score-input-group">
+    <div class="score-input">
+        <label>Communication</label>
+        <div class="score-buttons" data-score-type="communication">
+            <button type="button" class="score-btn" data-value="1">1</button>
+            <button type="button" class="score-btn" data-value="2">2</button>
+            <button type="button" class="score-btn" data-value="3">3</button>
+            <button type="button" class="score-btn" data-value="4">4</button>
+            <button type="button" class="score-btn" data-value="5">5</button>
+            <button type="button" class="score-btn" data-value="6">6</button>
+            <button type="button" class="score-btn" data-value="7">7</button>
+            <button type="button" class="score-btn" data-value="8">8</button>
+            <button type="button" class="score-btn" data-value="9">9</button>
+            <button type="button" class="score-btn" data-value="10">10</button>
+        </div>
+    </div>
+
+    <div class="score-input">
+        <label>Creativity</label>
+        <div class="score-buttons" data-score-type="creativity">
+            <button type="button" class="score-btn" data-value="1">1</button>
+            <button type="button" class="score-btn" data-value="2">2</button>
+            <button type="button" class="score-btn" data-value="3">3</button>
+            <button type="button" class="score-btn" data-value="4">4</button>
+            <button type="button" class="score-btn" data-value="5">5</button>
+            <button type="button" class="score-btn" data-value="6">6</button>
+            <button type="button" class="score-btn" data-value="7">7</button>
+            <button type="button" class="score-btn" data-value="8">8</button>
+            <button type="button" class="score-btn" data-value="9">9</button>
+            <button type="button" class="score-btn" data-value="10">10</button>
+        </div>
+    </div>
+
+    <div class="score-input">
+        <label>Body Language</label>
+        <div class="score-buttons" data-score-type="body_lang">
+            <button type="button" class="score-btn" data-value="1">1</button>
+            <button type="button" class="score-btn" data-value="2">2</button>
+            <button type="button" class="score-btn" data-value="3">3</button>
+            <button type="button" class="score-btn" data-value="4">4</button>
+            <button type="button" class="score-btn" data-value="5">5</button>
+            <button type="button" class="score-btn" data-value="6">6</button>
+            <button type="button" class="score-btn" data-value="7">7</button>
+            <button type="button" class="score-btn" data-value="8">8</button>
+            <button type="button" class="score-btn" data-value="9">9</button>
+            <button type="button" class="score-btn" data-value="10">10</button>
+        </div>
+    </div>
+
+    <div class="score-input">
+        <label>Confidence</label>
+        <div class="score-buttons" data-score-type="confidence">
+            <button type="button" class="score-btn" data-value="1">1</button>
+            <button type="button" class="score-btn" data-value="2">2</button>
+            <button type="button" class="score-btn" data-value="3">3</button>
+            <button type="button" class="score-btn" data-value="4">4</button>
+            <button type="button" class="score-btn" data-value="5">5</button>
+            <button type="button" class="score-btn" data-value="6">6</button>
+            <button type="button" class="score-btn" data-value="7">7</button>
+            <button type="button" class="score-btn" data-value="8">8</button>
+            <button type="button" class="score-btn" data-value="9">9</button>
+            <button type="button" class="score-btn" data-value="10">10</button>
+        </div>
+    </div>
+</div>
+
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelScoresBtn">Cancel</button>
+                        <button type="submit" class="btn btn-save" id="submitScoresBtn">
+                        <div class="save-btn-content">
+                            <div class="save-text">
+                                <span class="save-label">Save</span>
+                                <span id="totalScoreDisplay" class="save-score">0/40</span>
+                            </div>
+                        </div>
+                    </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Absent Tab -->
+            <div class="tab-content" id="absentTab">
+                <form id="absentForm">
+                    <div class="form-group">
+                        <label>Remarks (Required)</label>
+                        <textarea 
+                            id="remarksInput" 
+                            placeholder="Enter reason for absence (e.g., Absent, Sick, etc.)"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelAbsentBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submitAbsentBtn">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="extempore.js"></script>
+</body>
+</html>

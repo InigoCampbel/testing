@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🛡️ Admin Dashboard</h1>
+        <button class="btn-danger" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="active" onclick="switchTab('attendance', event)">Attendance</button>
+        <button onclick="switchTab('attendance_sessions', event)">Attendance Sessions</button>
+        <button onclick="switchTab('students', event)">Students</button>
+        <button onclick="switchTab('trainers', event)">Trainers</button>
+        <button onclick="switchTab('topics', event)">Topics</button>
+        <button onclick="switchTab('departments', event)">Departments</button>
+        <button onclick="switchTab('sessions', event)">Sessions</button>
+        <button onclick="switchTab('day_order', event)">Day Order</button>
+    </div>
+
+    <!-- ATTENDANCE TAB -->
+    <div class="content-section active" id="attendance">
+        <div class="section-header">
+            <h2>Attendance Management</h2>
+            <div>
+                <button class="btn-success btn-small" onclick="downloadTableData('attendance')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        
+
+        <!-- Filters -->
+        <div class="filter-panel" id="attendance-filter-panel">
+            <div class="filter-header">
+                <h3>Filters <span class="active-filters-badge hidden" id="attendance-filter-count">0</span></h3>
+                <button class="filter-toggle" onclick="toggleFilters('attendance')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Roll Number</label>
+                    <input type="text" id="filter-att-roll" placeholder="Search roll number...">
+                </div>
+                
+                <div class="filter-group">
+                    <label>Student Name</label>
+                    <input type="text" id="filter-att-name" placeholder="Search name...">
+                </div>
+                
+                <div class="filter-group">
+                    <label>Department</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('att-dept')">
+                            <span id="att-dept-display">Select departments...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="att-dept-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('att-dept')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('att-dept')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="att-dept-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="att-dept-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Date Range</label>
+                    <div class="date-range">
+                        <input type="date" id="filter-att-date-from">
+                        <span class="date-range-separator">to</span>
+                        <input type="date" id="filter-att-date-to">
+                    </div>
+                    <div class="date-quick-filters">
+                        <button onclick="setDateRange('attendance', 'today')">Today</button>
+                        <button onclick="setDateRange('attendance', 'week')">This Week</button>
+                        <button onclick="setDateRange('attendance', 'month')">This Month</button>
+                    </div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Session</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('att-session')">
+                            <span id="att-session-display">Select sessions...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="att-session-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('att-session')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('att-session')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="att-session-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="att-session-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Status</label>
+                    <select id="filter-att-present">
+                        <option value="">All Status</option>
+                        <option value="P">Present (P)</option>
+                        <option value="A">Absent (A)</option>
+                        <option value="P:A">Present then Absent (P:A)</option>
+                        <option value="A:P">Absent then Present (A:P)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('attendance')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('attendance')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="attendance-message"></div>
+        
+        <div class="table-container">
+            <table id="attendance-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading attendance data...</td></tr></tbody>
+            </table>
+        </div>
+        
+        <div class="pagination" id="attendance-pagination"></div>
+    </div>
+
+    <!-- ATTENDANCE SESSIONS TAB -->
+    <div class="content-section" id="attendance_sessions">
+        <div class="section-header">
+            <h2>Attendance Sessions</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('attendance_sessions', null)">➕ Add Session</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('attendance_sessions')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-panel" id="sessions-filter-panel">
+            <div class="filter-header">
+                <h3>Filters <span class="active-filters-badge hidden" id="sessions-filter-count">0</span></h3>
+                <button class="filter-toggle" onclick="toggleFilters('attendance_sessions')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Date Range</label>
+                    <div class="date-range">
+                        <input type="date" id="filter-sess-date-from">
+                        <span class="date-range-separator">to</span>
+                        <input type="date" id="filter-sess-date-to">
+                    </div>
+                    <div class="date-quick-filters">
+                        <button onclick="setDateRange('attendance_sessions', 'today')">Today</button>
+                        <button onclick="setDateRange('attendance_sessions', 'week')">This Week</button>
+                        <button onclick="setDateRange('attendance_sessions', 'month')">This Month</button>
+                    </div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Department</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('sess-dept')">
+                            <span id="sess-dept-display">Select departments...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="sess-dept-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('sess-dept')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('sess-dept')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="sess-dept-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="sess-dept-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Trainer</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('sess-trainer')">
+                            <span id="sess-trainer-display">Select trainers...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="sess-trainer-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('sess-trainer')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('sess-trainer')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="sess-trainer-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="sess-trainer-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Topic</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('sess-topic')">
+                            <span id="sess-topic-display">Select topics...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="sess-topic-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('sess-topic')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('sess-topic')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="sess-topic-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="sess-topic-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                <label>Vendor</label>
+                <div class="multiselect-container">
+                    <div class="multiselect-trigger" onclick="toggleMultiselect('sess-vendor')">
+                        <span id="sess-vendor-display">Select vendors...</span>
+                        <span>▼</span>
+                    </div>
+                    <div class="multiselect-dropdown" id="sess-vendor-dropdown">
+                        <div class="multiselect-header">
+                            <button class="btn-primary btn-small" onclick="selectAllMulti('sess-vendor')">Select All</button>
+                            <button class="btn-secondary btn-small" onclick="clearAllMulti('sess-vendor')">Clear All</button>
+                        </div>
+                        <div class="multiselect-options" id="sess-vendor-options"></div>
+                    </div>
+                </div>
+                <div class="selected-tags" id="sess-vendor-tags"></div>
+            </div>
+                
+                <div class="filter-group">
+                    <label>Session</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('sess-session')">
+                            <span id="sess-session-display">Select sessions...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="sess-session-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('sess-session')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('sess-session')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="sess-session-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="sess-session-tags"></div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('attendance_sessions')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('attendance_sessions')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="attendance_sessions-message"></div>
+        
+        <div class="table-container">
+            <table id="attendance_sessions-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading sessions...</td></tr></tbody>
+            </table>
+        </div>
+        
+        <div class="pagination" id="sessions-pagination"></div>
+    </div>
+
+    <!-- STUDENTS TAB -->
+    <div class="content-section" id="students">
+        <div class="section-header">
+            <h2>Students</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('students', null)">➕ Add Student</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('students')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-panel">
+            <div class="filter-header">
+                <h3>Filters</h3>
+                <button class="filter-toggle" onclick="toggleFilters('students')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Roll Number</label>
+                    <input type="text" id="filter-stud-roll" placeholder="Search roll number...">
+                </div>
+                <div class="filter-group">
+                    <label>Name</label>
+                    <input type="text" id="filter-stud-name" placeholder="Search name...">
+                </div>
+                <div class="filter-group">
+                    <label>Department</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('stud-dept')">
+                            <span id="stud-dept-display">Select departments...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="stud-dept-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('stud-dept')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('stud-dept')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="stud-dept-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="stud-dept-tags"></div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('students')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('students')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="students-message"></div>
+        <div class="table-container">
+            <table id="students-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading students...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="students-pagination"></div>
+    </div>
+
+    <!-- TRAINERS TAB -->
+    <div class="content-section" id="trainers">
+        <div class="section-header">
+            <h2>Trainers</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('trainers', null)">➕ Add Trainer</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('trainers')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-panel">
+            <div class="filter-header">
+                <h3>Filters</h3>
+                <button class="filter-toggle" onclick="toggleFilters('trainers')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Trainer Name</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('train-name')">
+                            <span id="train-name-display">Select trainers...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="train-name-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('train-name')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('train-name')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="train-name-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="train-name-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Vendor</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('train-vendor')">
+                            <span id="train-vendor-display">Select vendors...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="train-vendor-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('train-vendor')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('train-vendor')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="train-vendor-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="train-vendor-tags"></div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('trainers')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('trainers')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="trainers-message"></div>
+        <div class="table-container">
+            <table id="trainers-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading trainers...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="trainers-pagination"></div>
+    </div>    
+
+
+
+    <!-- TOPICS TAB -->
+    <div class="content-section" id="topics">
+        <div class="section-header">
+            <h2>Topics</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('topics', null)">➕ Add Topic</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('topics')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-panel">
+            <div class="filter-header">
+                <h3>Filters</h3>
+                <button class="filter-toggle" onclick="toggleFilters('topics')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Year</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('topic-year')">
+                            <span id="topic-year-display">Select years...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="topic-year-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('topic-year')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('topic-year')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="topic-year-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="topic-year-tags"></div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('topics')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('topics')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="topics-message"></div>
+        <div class="table-container">
+            <table id="topics-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading topics...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="topics-pagination"></div>
+    </div>
+
+
+
+
+    <!-- DEPARTMENTS TAB -->
+    <div class="content-section" id="departments">
+        <div class="section-header">
+            <h2>Departments</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('departments', null)">➕ Add Department</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('departments')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-panel">
+            <div class="filter-header">
+                <h3>Filters</h3>
+                <button class="filter-toggle" onclick="toggleFilters('departments')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Department Name</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('dept-name')">
+                            <span id="dept-name-display">Select departments...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="dept-name-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('dept-name')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('dept-name')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="dept-name-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="dept-name-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Year</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('dept-year')">
+                            <span id="dept-year-display">Select years...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="dept-year-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('dept-year')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('dept-year')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="dept-year-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="dept-year-tags"></div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('departments')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('departments')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="departments-message"></div>
+        <div class="table-container">
+            <table id="departments-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading departments...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="departments-pagination"></div>
+    </div>
+
+
+<!-- SESSIONS TAB -->
+    <div class="content-section" id="sessions">
+        <div class="section-header">
+            <h2>Sessions</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('sessions', null)">➕ Add Session</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('sessions')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <div id="sessions-message"></div>
+        <div class="table-container">
+            <table id="sessions-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading sessions...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="sessions-pagination"></div>
+    </div>
+    
+    <!-- DAY ORDER TAB -->
+    <div class="content-section" id="day_order">
+        <div class="section-header">
+            <h2>Day Order</h2>
+            <div>
+                <button class="btn-primary" onclick="openModal('day_order', null)">➕ Add Day Order</button>
+                <button class="btn-success btn-small" onclick="downloadTableData('day_order')">📥 Download CSV</button>
+            </div>
+        </div>
+
+        <div class="filter-panel">
+            <div class="filter-header">
+                <h3>Filters</h3>
+                <button class="filter-toggle" onclick="toggleFilters('day_order')">Show/Hide</button>
+            </div>
+            <div class="filter-content">
+                <div class="filter-group">
+                    <label>Vendor</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('day-vendor')">
+                            <span id="day-vendor-display">Select vendors...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="day-vendor-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('day-vendor')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('day-vendor')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="day-vendor-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="day-vendor-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Day Order</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('day-order')">
+                            <span id="day-order-display">Select day orders...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="day-order-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('day-order')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('day-order')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="day-order-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="day-order-tags"></div>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Department</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-trigger" onclick="toggleMultiselect('day-dept')">
+                            <span id="day-dept-display">Select departments...</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="day-dept-dropdown">
+                            <div class="multiselect-header">
+                                <button class="btn-primary btn-small" onclick="selectAllMulti('day-dept')">Select All</button>
+                                <button class="btn-secondary btn-small" onclick="clearAllMulti('day-dept')">Clear All</button>
+                            </div>
+                            <div class="multiselect-options" id="day-dept-options"></div>
+                        </div>
+                    </div>
+                    <div class="selected-tags" id="day-dept-tags"></div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn-primary" onclick="applyFilters('day_order')">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters('day_order')">Clear All</button>
+            </div>
+        </div>
+
+        <div id="day_order-message"></div>
+        <div class="table-container">
+            <table id="day_order-table">
+                <thead></thead>
+                <tbody><tr><td class="loading">Loading day order...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pagination" id="day_order-pagination"></div>
+    </div>
+
+
+
+<!-- Modal -->
+<div class="modal" id="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modal-title">Add/Edit</h2>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="modal-message"></div>
+            <form id="modal-form" onsubmit="handleSubmit(event)">
+                <div id="form-fields"></div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+            <button type="submit" class="btn-primary" form="modal-form">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<script src="dashboard.js"></script>
+
+</body>
+</html>

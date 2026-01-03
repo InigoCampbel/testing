@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Details</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .back-link {
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .back-link:hover {
+            color: #1e40af;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .department-info {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border-top: 4px solid #1e3a8a;
+        }
+
+        .dept-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .dept-name {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1e3a8a;
+        }
+
+        .student-count {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .students-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f3f4f6;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        th {
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .roll-number {
+            font-weight: 600;
+            color: #1e3a8a;
+        }
+
+        .student-name {
+            color: #1f2937;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: #3b82f6;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 2px solid #fecaca;
+            border-left: 5px solid #dc2626;
+            border-radius: 8px;
+            padding: 16px 20px;
+            color: #dc2626;
+            font-size: 0.95rem;
+            margin-bottom: 20px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+            font-size: 1.05rem;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+
+            .dept-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .dept-name {
+                font-size: 1.4rem;
+            }
+
+            th {
+                padding: 12px;
+                font-size: 0.85rem;
+            }
+
+            td {
+                padding: 10px 12px;
+                font-size: 0.9rem;
+            }
+
+            table {
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a class="back-link" onclick="goBack()">
+            <span>←</span> Back to Selection
+        </a>
+        <div></div>
+    </div>
+
+    <div class="container">
+        <div id="loadingDiv" class="loading">Loading students...</div>
+        <div id="errorDiv" class="error" style="display: none;"></div>
+
+        <div class="department-info hidden" id="deptInfo">
+            <div class="dept-header">
+                <div>
+                    <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 8px;">Department</p>
+                    <div class="dept-name" id="departmentName">-</div>
+                </div>
+                <div class="student-count">
+                    Total Students: <span id="totalCount">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="students-table hidden" id="tableContainer">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Roll Number</th>
+                        <th>Student Name</th>
+                    </tr>
+                </thead>
+                <tbody id="studentsList"></tbody>
+            </table>
+        </div>
+
+        <div class="empty-state hidden" id="emptyState">
+            No students found for this department
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // UTILITY FUNCTIONS
+        // ========================================
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorDiv');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function showLoading(show) {
+            const loadingDiv = document.getElementById('loadingDiv');
+            const deptInfo = document.getElementById('deptInfo');
+            const tableContainer = document.getElementById('tableContainer');
+            const emptyState = document.getElementById('emptyState');
+
+            if (show) {
+                loadingDiv.style.display = 'block';
+                deptInfo.classList.add('hidden');
+                tableContainer.classList.add('hidden');
+                emptyState.classList.add('hidden');
+            } else {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        function goBack() {
+            window.history.back();
+        }
+
+        // ========================================
+        // DATA LOADING
+        // ========================================
+
+        async function loadStudents(departmentId) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('students')
+                    .select('*')
+                    .eq('department_id', departmentId)
+                    .eq('active', true) 
+                    .order('roll_number', { ascending: true });
+
+                if (error) throw error;
+
+                return data || [];
+            } catch (error) {
+                console.error('Error loading students:', error);
+                throw error;
+            }
+        }
+
+        // ========================================
+        // UI RENDERING
+        // ========================================
+
+        function renderStudents(students) {
+            const studentsList = document.getElementById('studentsList');
+            const tableContainer = document.getElementById('tableContainer');
+            const emptyState = document.getElementById('emptyState');
+
+            if (!students || students.length === 0) {
+                tableContainer.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            studentsList.innerHTML = '';
+            students.forEach(student => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="roll-number">${student.roll_number || '-'}</td>
+                    <td class="student-name">${student.name || '-'}</td>
+                `;
+                studentsList.appendChild(row);
+            });
+
+            tableContainer.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+        }
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+
+        async function initialize() {
+            try {
+                showLoading(true);
+
+                // Get data from sessionStorage
+                const selectedDepartment = sessionStorage.getItem('selectedDepartment');
+                const selectedDepartmentId = sessionStorage.getItem('selectedDepartmentId');
+
+                if (!selectedDepartment || !selectedDepartmentId) {
+                    showError('Invalid session. Please go back and select a department.');
+                    showLoading(false);
+                    return;
+                }
+
+                // Load students
+                const students = await loadStudents(selectedDepartmentId);
+
+                // Display department info
+                document.getElementById('departmentName').textContent = selectedDepartment;
+                document.getElementById('totalCount').textContent = students.length;
+                document.getElementById('deptInfo').classList.remove('hidden');
+
+                // Render students
+                renderStudents(students);
+
+                showLoading(false);
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError(error.message || 'Failed to load students. Please try again.');
+                showLoading(false);
+            }
+        }
+
+        // Initialize on page load
+        initialize();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Attendance</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="a_styles.css">
+</head>
+<body>
+
+    <!-- Online/Offline Indicator -->
+    <div class="network-status" id="networkStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+    </div>
+
+    <div class="header">
+        <div class="back-btn" id="backBtn">← Back to Selection</div>
+        <div class="selection-info">
+            <div class="info-item">
+                <div class="info-label">Day Order</div>
+                <div class="info-value" id="dayOrderValue">-</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Department</div>
+                <div class="info-value" id="departmentValue">-</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Mark Attendance</h2>
+
+        <div class="success-message" id="successMessage">
+            ✓ Attendance saved successfully!
+        </div>
+
+        <div id="loadingDiv" class="loading">Loading students...</div>
+
+        <div id="attendanceForm" style="display: none;">
+            <div class="form-group">
+                <label for="dateInput">Date</label>
+                <input type="date" id="dateInput" required readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="sessionSelect">Session</label>
+                <select id="sessionSelect" required>
+                    <option value="">Select a session</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="topicSelect">Topic</label>
+                <select id="topicSelect" required>
+                    <option value="">Select a topic</option>
+                </select>
+            </div>
+
+            <!-- Card View for marking attendance -->
+            <div class="card-view" id="cardView" style="display: none;">
+                <!-- Progress Indicator -->
+                <div class="progress-indicator">
+                    <div class="progress-text">
+                        <span id="currentIndex">1</span> / <span id="totalStudents">0</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+
+                <!-- Student Card -->
+                <div class="student-card">
+                    <div class="card-roll-number" id="cardRollNumber">-</div>
+                    <div class="card-student-name" id="cardStudentName">-</div>
+                    
+                    <button class="attendance-btn present" id="attendanceBtn">
+                        <span class="btn-text">Present</span>
+                        <span class="btn-icon">✓</span>
+                    </button>
+
+                    <!-- Live Count -->
+                    <div class="live-count">
+                        Present: <strong id="livePresent">0</strong> | 
+                        Absent: <strong id="liveAbsent">0</strong>
+                    </div>
+                </div>
+
+                <!-- Navigation Buttons -->
+                <div class="card-navigation">
+                    <button class="nav-btn btn-back" id="btnBack" style="display: none;">
+                        ← Back
+                    </button>
+                    <button class="nav-btn btn-next" id="btnNext">
+                        Next →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table View (for editing) -->
+            <div class="student-list" id="studentListDiv" style="display: none;">
+                <div class="view-header">
+                    <h3>Edit Attendance</h3>
+                    <div class="student-count">
+                        Total Students: <strong id="totalCount">0</strong> | 
+                        Present: <strong id="presentCount">0</strong> | 
+                        Absent: <strong id="absentCount">0</strong>
+                    </div>
+                </div>
+                <div id="studentList"></div>
+                <button class="btn btn-save" id="tableSaveBtn">Save & Review</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-icon">✓</div>
+                <div class="modal-title">Review Attendance</div>
+                <div class="modal-subtitle">Please verify before submitting</div>
+            </div>
+
+            <div class="summary-section absent-section">
+                <div class="summary-title">Absentees (<span id="absentModalCount">0</span>)</div>
+                <div class="roll-numbers" id="absentRollNumbers">None</div>
+            </div>
+
+            <div class="summary-section">
+                <div class="summary-title">Present (<span id="presentModalCount">0</span>)</div>
+                <div class="roll-numbers" id="presentRollNumbers">None</div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-edit" id="editBtn">Edit</button>
+                <button class="modal-btn modal-btn-confirm" id="confirmSubmitBtn">Confirm & Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // STATE MANAGEMENT
+        // ========================================
+        let students = [];
+        let sessions = [];
+        let sessionMap = {};
+        let topics = [];
+        let selectedTopicId = null;
+        let attendanceData = {};
+        let currentStudentIndex = 0;
+        let selectedDayOrder = sessionStorage.getItem('selectedDayOrder');
+        let selectedDepartment = sessionStorage.getItem('selectedDepartment');
+        let selectedDepartmentId = parseInt(sessionStorage.getItem('selectedDepartmentId'));
+        let selectedDepartmentYear = parseInt(sessionStorage.getItem('selectedDepartmentYear'));  // ADD THIS LINE
+        let trainerId = sessionStorage.getItem('trainerId');
+
+        // ADD THIS SECTION:
+        // Backup critical session data to localStorage for page refresh resilience
+        function backupSessionData() {
+            if (selectedDayOrder && selectedDepartment && trainerId) {
+                localStorage.setItem('backup_dayOrder', selectedDayOrder);
+                localStorage.setItem('backup_department', selectedDepartment);
+                localStorage.setItem('backup_departmentId', selectedDepartmentId);
+                localStorage.setItem('backup_departmentYear', selectedDepartmentYear);
+                localStorage.setItem('backup_trainerId', trainerId);
+            }
+        }
+
+        // Restore session data from backup if missing
+        function restoreSessionData() {
+            if (!selectedDayOrder) selectedDayOrder = localStorage.getItem('backup_dayOrder');
+            if (!selectedDepartment) selectedDepartment = localStorage.getItem('backup_department');
+            if (!selectedDepartmentId) selectedDepartmentId = parseInt(localStorage.getItem('backup_departmentId'));
+            if (!selectedDepartmentYear) selectedDepartmentYear = parseInt(localStorage.getItem('backup_departmentYear'));
+            if (!trainerId) trainerId = localStorage.getItem('backup_trainerId');
+            
+            // Update sessionStorage with restored values
+            if (selectedDayOrder) sessionStorage.setItem('selectedDayOrder', selectedDayOrder);
+            if (selectedDepartment) sessionStorage.setItem('selectedDepartment', selectedDepartment);
+            if (selectedDepartmentId) sessionStorage.setItem('selectedDepartmentId', selectedDepartmentId);
+            if (selectedDepartmentYear) sessionStorage.setItem('selectedDepartmentYear', selectedDepartmentYear);
+            if (trainerId) sessionStorage.setItem('trainerId', trainerId);
+        }
+
+        // Call restore immediately
+        restoreSessionData();
+
+        // ADD THIS SECTION - Cache database data
+        const CACHE_DURATION = 5 * 60 * 1000; // 30 minutes in milliseconds
+
+        function saveCacheData(key, data) {
+            const cacheItem = {
+                data: data,
+                timestamp: new Date().getTime()
+            };
+            localStorage.setItem(key, JSON.stringify(cacheItem));
+        }
+
+        function getCacheData(key) {
+            const cached = localStorage.getItem(key);
+            if (!cached) return null;
+            
+            const cacheItem = JSON.parse(cached);
+            const now = new Date().getTime();
+            
+            // Check if cache is still valid (within 30 minutes)
+            if (now - cacheItem.timestamp < CACHE_DURATION) {
+                return cacheItem.data;
+            }
+            
+            // Cache expired, remove it
+            localStorage.removeItem(key);
+            return null;
+        }
+
+
+        // Auto-save attendance data every time it changes
+        function saveToLocalStorage() {
+            try {
+                // Validate data before saving
+                if (!attendanceData || Object.keys(attendanceData).length === 0) {
+                    console.warn('Attempted to save empty attendanceData');
+                    return;
+                }
+                
+                const dataToSave = {
+                    attendanceData: attendanceData,
+                    currentStudentIndex: currentStudentIndex,
+                    selectedTopicId: selectedTopicId,
+                    date: dateInput.value,
+                    session: sessionSelect.value,
+                    timestamp: new Date().toISOString()
+                };
+                
+                const jsonString = JSON.stringify(dataToSave);
+                
+                // Verify JSON is valid before saving
+                JSON.parse(jsonString);
+                
+                localStorage.setItem('unsavedAttendance', jsonString);
+            } catch (error) {
+                console.error('Failed to save to localStorage:', error);
+                // Don't crash the app, just log the error
+            }
+        }
+
+        // Load saved data on page load
+        // FIXED VERSION - Use this instead
+        function loadFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem('unsavedAttendance');
+                if (!saved) return false;
+                
+                const data = JSON.parse(saved);
+                
+                // Validate the loaded data exists
+                if (!data || !data.attendanceData) {
+                    console.warn('Invalid data in localStorage, clearing...');
+                    localStorage.removeItem('unsavedAttendance');
+                    return false;
+                }
+                
+                // Check if data is recent (within last 24 hours)
+                if (data.timestamp) {
+                    const savedTime = new Date(data.timestamp);
+                    const now = new Date();
+                    const hoursDiff = (now - savedTime) / (1000 * 60 * 60);
+                    
+                    if (hoursDiff > 3) {
+                        console.warn('Cached data too old, clearing...');
+                        localStorage.removeItem('unsavedAttendance');
+                        return false;
+                    }
+                }
+                
+                // CRITICAL: Validate saved data matches current students
+                const savedRollNumbers = Object.keys(data.attendanceData);
+                const currentRollNumbers = students.map(s => s.roll_number);
+                
+                // Check if saved data is for the same students
+                const isValidData = savedRollNumbers.length === currentRollNumbers.length &&
+                                savedRollNumbers.every(roll => currentRollNumbers.includes(roll));
+                
+                if (!isValidData) {
+                    console.warn('Saved attendance data does not match current students, ignoring...');
+                    localStorage.removeItem('unsavedAttendance');
+                    return false;
+                }
+                
+                // Check if we have data for ALL current students
+                const hasCompleteData = currentRollNumbers.every(roll => 
+                    data.attendanceData[roll] === true || data.attendanceData[roll] === false
+                );
+                
+                if (!hasCompleteData) {
+                    console.warn('Saved data is incomplete, ignoring...');
+                    localStorage.removeItem('unsavedAttendance');
+                    return false;
+                }
+                
+                // Data is valid - restore it
+                attendanceData = data.attendanceData;
+                currentStudentIndex = data.currentStudentIndex || 0;
+                selectedTopicId = data.selectedTopicId;
+                
+                // Restore form values
+                if (data.date) dateInput.value = data.date;
+                if (data.session) sessionSelect.value = data.session;
+                if (data.selectedTopicId) topicSelect.value = data.selectedTopicId;
+                
+                console.log('✓ Successfully restored attendance data');
+                return true;
+            } catch (error) {
+                console.error('Failed to load from localStorage:', error);
+                localStorage.removeItem('unsavedAttendance');
+                return false;
+            }
+        }
+
+        // Network status monitoring
+        let isOnline = navigator.onLine;
+        const networkStatus = document.getElementById('networkStatus');
+
+        async function updateNetworkStatus() {
+            // Show checking state
+            networkStatus.className = 'network-status checking';
+            networkStatus.querySelector('.status-text').textContent = 'Checking...';
+            
+            // First check navigator.onLine
+            if (!navigator.onLine) {
+                isOnline = false;
+                networkStatus.className = 'network-status offline';
+                networkStatus.querySelector('.status-text').textContent = 'Offline';
+                return;
+            }
+            
+            // If navigator says online, verify with actual connectivity check
+            try {
+                // Ping Supabase to check real internet connectivity
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
+                const response = await fetch(SUPABASE_URL + '/rest/v1/', {
+                    method: 'HEAD',
+                    signal: controller.signal,
+                    cache: 'no-store' // Prevent cached responses
+                });
+                
+                clearTimeout(timeoutId);
+                
+                // If we get any response, we have internet
+                isOnline = true;
+                networkStatus.className = 'network-status online';
+                networkStatus.querySelector('.status-text').textContent = 'Online';
+            } catch (error) {
+                // Fetch failed - no real internet connection
+                isOnline = false;
+                networkStatus.className = 'network-status offline';
+                networkStatus.querySelector('.status-text').textContent = 'Offline';
+            }
+        }
+
+        // Show save indicator
+        function showSaveIndicator(isOffline = false) {
+            // Create indicator if it doesn't exist
+            let indicator = document.getElementById('savedIndicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'savedIndicator';
+                indicator.className = 'saved-indicator';
+                document.body.appendChild(indicator);
+            }
+            
+            if (isOffline) {
+                indicator.className = 'saved-indicator offline-mode show';
+                indicator.innerHTML = 'Saved Offline - Will sync when online';
+            } else {
+                indicator.className = 'saved-indicator show';
+                indicator.innerHTML = '✓ Auto-saved';
+            }
+            
+            setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 2000);
+        }
+
+        // Listen for network changes
+        window.addEventListener('online', async () => {
+            await updateNetworkStatus();
+            if (isOnline) {
+                alert('✅ You\'re back online! You can now submit attendance.');
+            }
+        });
+
+        window.addEventListener('offline', async () => {
+            await updateNetworkStatus();
+            if (!isOnline) {
+                alert('⚠️ You\'re offline. Don\'t worry - your attendance data is being saved locally and will be submitted when you\'re back online.');
+            }
+        });
+
+        // Check connectivity every 10 seconds
+        setInterval(() => {
+            updateNetworkStatus();
+        }, 10000);
+
+        // ========================================
+        // DOM ELEMENTS
+        // ========================================
+        const loadingDiv = document.getElementById('loadingDiv');
+        const attendanceForm = document.getElementById('attendanceForm');
+        const dateInput = document.getElementById('dateInput');
+        const sessionSelect = document.getElementById('sessionSelect');
+        const topicSelect = document.getElementById('topicSelect');
+        const cardView = document.getElementById('cardView');
+        const studentListDiv = document.getElementById('studentListDiv');
+        const studentList = document.getElementById('studentList');
+        const confirmModal = document.getElementById('confirmModal');
+        const successMessage = document.getElementById('successMessage');
+        const backBtn = document.getElementById('backBtn');
+
+        // Card view elements
+        const cardRollNumber = document.getElementById('cardRollNumber');
+        const cardStudentName = document.getElementById('cardStudentName');
+        const attendanceBtn = document.getElementById('attendanceBtn');
+        const btnBack = document.getElementById('btnBack');
+        const btnNext = document.getElementById('btnNext');
+        const currentIndexEl = document.getElementById('currentIndex');
+        const totalStudentsEl = document.getElementById('totalStudents');
+        const progressFill = document.getElementById('progressFill');
+        const livePresent = document.getElementById('livePresent');
+        const liveAbsent = document.getElementById('liveAbsent');
+
+        // Modal elements
+        const editBtn = document.getElementById('editBtn');
+        const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+        const tableSaveBtn = document.getElementById('tableSaveBtn');
+
+        // ========================================
+        // FUNCTIONS
+        // ========================================
+
+        async function checkAuth() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                window.location.href = 'index.html';
+                return false;
+            }
+            return true;
+        }
+
+        async function loadSessions() {
+            try {
+                // Try to get from cache first
+                const cached = getCacheData('cache_sessions');
+                if (cached) {
+                    console.log('✓ Using cached sessions');
+                    sessions = cached;
+                    
+                    sessionMap = {};
+                    sessions.forEach(s => {
+                        sessionMap[s.session] = s.id;
+                    });
+                    
+                    renderSessions();
+                    return;
+                }
+                
+                // Not in cache, fetch from database
+                const { data, error } = await supabaseClient
+                    .from('sessions')
+                    .select('id, session');
+
+                if (error) throw error;
+                
+                sessions = data;
+                
+                // Save to cache
+                saveCacheData('cache_sessions', data);
+                
+                sessionMap = {};
+                sessions.forEach(s => {
+                    sessionMap[s.session] = s.id;
+                });
+                
+                renderSessions();
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+            }
+        }
+        
+        async function loadTopics() {
+            try {
+                // Try to get from cache first (cache key includes year for accuracy)
+                const cacheKey = `cache_topics_year${selectedDepartmentYear}`;
+                const cached = getCacheData(cacheKey);
+                if (cached) {
+                    console.log('✓ Using cached topics');
+                    topics = cached;
+                    renderTopics();
+                    return;
+                }
+                
+                // Not in cache, fetch from database
+                const { data, error } = await supabaseClient
+                    .from('topics')
+                    .select('*')
+                    .eq('year', selectedDepartmentYear)
+                    .order('topic_name');
+
+                if (error) {
+                    console.error('Supabase error:', error);
+                    throw error;
+                }
+                
+                console.log('Topics loaded:', data);
+                
+                topics = data || [];
+                
+                // Save to cache
+                saveCacheData(cacheKey, topics);
+                
+                renderTopics();
+            } catch (error) {
+                console.error('Error loading topics:', error);
+                alert('Error loading topics from database. Please refresh the page.');
+            }
+        }
+
+        function renderTopics() {
+            // Clear existing options except the first one
+            topicSelect.innerHTML = '<option value="">Select a topic</option>';
+            
+            if (topics.length === 0) {
+                console.warn('No topics found in database');
+                return;
+            }
+            
+            topics.forEach(topic => {
+                const option = document.createElement('option');
+                option.value = topic.id;
+                option.textContent = topic.topic_name;
+                topicSelect.appendChild(option);
+            });
+            
+            console.log(`${topics.length} topics added to dropdown`);
+        }
+
+        function renderSessions() {
+            sessions.forEach(session => {
+                const option = document.createElement('option');
+                option.value = session.session; // KEEP: Display text as value for user
+                option.textContent = session.session; // KEEP: Display text to user
+                sessionSelect.appendChild(option);
+            });
+        }
+
+
+        async function checkAttendanceExists(departmentId, date, sessionId) { // CHANGE: Accept sessionId instead of session text
+            try {
+                const { data, error } = await supabaseClient
+                    .from('attendance_sessions')
+                    .select('id')
+                    .eq('department_id', departmentId)
+                    .eq('date', date)
+                    .eq('session_id', sessionId) // CHANGE: Check session_id instead of session
+                    .limit(1);
+                
+                if (error && error.code !== 'PGRST116') throw error;
+                
+                return data && data.length > 0;
+            } catch (error) {
+                console.error('Error checking attendance:', error);
+                return false;
+            }
+        }
+
+
+        async function loadStudents() {
+            try {
+            // Use the department ID we already have!
+            const { data, error } = await supabaseClient
+                .from('students')
+                .select('*')
+                .eq('department_id', selectedDepartmentId)
+                .eq('active', true) 
+                .order('roll_number');
+
+                if (error) throw error;
+                
+                students = data;
+                
+                // Initialize attendance data (all present by default)
+                students.forEach(student => {
+                    attendanceData[student.roll_number] = 'P'; 
+                });
+                
+            } catch (error) {
+                console.error('Error loading students:', error);
+                alert('Error loading students. Please try again.');
+            }
+        }
+
+        function renderCurrentCard() {
+            const student = students[currentStudentIndex];
+            
+            cardRollNumber.textContent = student.roll_number;
+            cardStudentName.textContent = student.name;
+            
+            // Update button state
+           // Get attendance value with safety check
+            let attendanceStatus = attendanceData[student.roll_number];
+
+            // CRITICAL: Ensure value is valid
+            if (attendanceStatus !== 'P' && attendanceStatus !== 'A') {
+                console.warn(`Student ${student.roll_number} had invalid attendance value: ${attendanceStatus}, defaulting to present`);
+                attendanceData[student.roll_number] = 'P';
+                attendanceStatus = 'P';
+                saveToLocalStorage();
+            }
+
+            // Now guaranteed to be valid
+            if (attendanceStatus === 'P') {
+                attendanceBtn.classList.remove('absent');
+                attendanceBtn.classList.add('present');
+                attendanceBtn.querySelector('.btn-text').textContent = 'Present';
+                attendanceBtn.querySelector('.btn-icon').textContent = '✓';
+            } else {
+                attendanceBtn.classList.remove('present');
+                attendanceBtn.classList.add('absent');
+                attendanceBtn.querySelector('.btn-text').textContent = 'Absent';
+                attendanceBtn.querySelector('.btn-icon').textContent = 'X';
+            }
+
+            // Update progress
+            currentIndexEl.textContent = currentStudentIndex + 1;
+            totalStudentsEl.textContent = students.length;
+            const progress = ((currentStudentIndex + 1) / students.length) * 100;
+            progressFill.style.width = progress + '%';
+
+            // Update navigation buttons
+            btnBack.style.display = currentStudentIndex > 0 ? 'block' : 'none';
+            btnNext.textContent = currentStudentIndex === students.length - 1 ? 'Save & Review →' : 'Next →';
+
+            // Update live count
+            updateLiveCount();
+        }
+
+        function updateLiveCount() {
+            const present = Object.values(attendanceData).filter(v => v === 'P').length;
+            const absent = students.length - present;
+            
+            livePresent.textContent = present;
+            liveAbsent.textContent = absent;
+        }
+
+        function toggleAttendance() {
+            const student = students[currentStudentIndex];
+            attendanceData[student.roll_number] = attendanceData[student.roll_number] === 'P' ? 'A' : 'P';
+            
+            saveToLocalStorage(); // ADD THIS LINE
+            
+            // Visual feedback - subtle pulse
+            attendanceBtn.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                attendanceBtn.style.transform = 'scale(1)';
+                renderCurrentCard();
+            }, 100);
+        }
+
+        function goToNextStudent() {
+            if (currentStudentIndex === students.length - 1) {
+                // Last student - save and show modal
+                handleSave();
+            } else {
+                currentStudentIndex++;
+                saveToLocalStorage(); // ADD THIS LINE
+                renderCurrentCard();
+            }
+        }
+
+        function goToPreviousStudent() {
+            if (currentStudentIndex > 0) {
+                currentStudentIndex--;
+                saveToLocalStorage(); // ADD THIS LINE
+                renderCurrentCard();
+            }
+        }
+
+        
+        async function handleSave() {
+            try {
+                // ADD THIS VALIDATION BLOCK AT THE VERY START:
+                // ============================================
+                // Ensure ALL students have attendance marked
+                const missingStudents = students.filter(
+                s => attendanceData[s.roll_number] === undefined || 
+                    attendanceData[s.roll_number] === null ||
+                    (attendanceData[s.roll_number] !== 'P' && attendanceData[s.roll_number] !== 'A')
+            );
+
+            if (missingStudents.length > 0) {
+                console.error('Students with invalid attendance:', missingStudents.map(s => s.roll_number));
+                
+                // Auto-fix: mark them as present
+                missingStudents.forEach(student => {
+                    attendanceData[student.roll_number] = 'P';
+                });
+                    
+                    alert(`⚠️ Fixed ${missingStudents.length} students with missing attendance data. They have been marked as Present. Please review before submitting.`);
+                    
+                    // Save the fix
+                    saveToLocalStorage();
+                }
+                // ============================================
+                
+                const records = students.map(student => ({
+                    roll_number: student.roll_number,
+                    present: attendanceData[student.roll_number],
+                    timestamp: new Date().toISOString()
+                }));
+
+                console.log('Attendance records prepared:', records.length);
+
+                // CHANGE: Get session ID from the map
+                const selectedSessionText = sessionSelect.value;
+                const selectedSessionId = sessionMap[selectedSessionText];
+
+                // Save to localStorage (for confirmation modal)
+                localStorage.setItem('pendingAttendance', JSON.stringify(records));
+                localStorage.setItem('attendanceMetadata', JSON.stringify({
+                    date: dateInput.value,
+                    session: selectedSessionText, // KEEP: For display purposes
+                    sessionId: selectedSessionId, // ADD: Store the ID for database
+                    department: selectedDepartment,
+                    dayOrder: selectedDayOrder,
+                    departmentId: selectedDepartmentId,
+                    trainerId: trainerId,
+                    topicId: selectedTopicId
+                }));
+
+                // Show success message briefly
+                successMessage.classList.add('active');
+                
+                setTimeout(() => {
+                    successMessage.classList.remove('active');
+                    showConfirmationModal();
+                }, 1000);
+
+            } catch (error) {
+                console.error('Error preparing attendance:', error);
+                alert('Error preparing attendance. Please try again.\n\nError: ' + error.message);
+            }
+        }
+
+        function showConfirmationModal() {
+            const absentStudents = students.filter(s => attendanceData[s.roll_number] === 'A');
+            const presentStudents = students.filter(s => attendanceData[s.roll_number] === 'P');
+            const absentRolls = absentStudents.map(s => s.roll_number);
+            const presentRolls = presentStudents.map(s => s.roll_number);
+            
+            document.getElementById('absentModalCount').textContent = absentRolls.length;
+            document.getElementById('presentModalCount').textContent = presentRolls.length;
+            document.getElementById('absentRollNumbers').textContent = formatRollNumbers(absentRolls);
+            document.getElementById('presentRollNumbers').textContent = formatRollNumbers(presentRolls);
+            
+            confirmModal.classList.add('active');
+        }
+
+        function formatRollNumbers(rollNumbers) {
+            if (rollNumbers.length === 0) return 'None';
+            
+            const formatted = [rollNumbers[0]];
+            for (let i = 1; i < rollNumbers.length; i++) {
+                formatted.push(rollNumbers[i].slice(-2));
+            }
+            
+            return formatted.join(', ');
+        }
+
+        function handleEdit() {
+            confirmModal.classList.remove('active');
+            
+            // Switch to table view
+            cardView.style.display = 'none';
+            studentListDiv.style.display = 'block';
+            
+            renderTableView();
+        }
+
+        function renderTableView() {
+            studentList.innerHTML = '';
+            
+            students.forEach(student => {
+                const item = document.createElement('div');
+                item.className = 'student-item';
+                if (attendanceData[student.roll_number] === 'A') {
+                    item.classList.add('absent');
+                }
+
+                item.innerHTML = `
+                    <div class="student-info">
+                        <div class="student-roll">${student.roll_number}</div>
+                        <div class="student-name">${student.name}</div>
+                    </div>
+                    <div class="attendance-toggle">
+                        <button class="toggle-btn ${attendanceData[student.roll_number] === 'P' ? 'active' : ''}" 
+                                onclick="markPresent('${student.roll_number}')">
+                            Present
+                        </button>
+                        <button class="toggle-btn ${attendanceData[student.roll_number] === 'A' ? 'absent-active' : ''}" 
+                                onclick="markAbsent('${student.roll_number}')">
+                            Absent
+                        </button>
+                    </div>
+                `;
+                
+                studentList.appendChild(item);
+            });
+
+            updateTableCounts();
+        }
+
+        window.markPresent = function(rollNumber) {
+            attendanceData[rollNumber] = 'P';
+            saveToLocalStorage(); // ADD THIS LINE
+            renderTableView();
+        }
+
+        window.markAbsent = function(rollNumber) {
+            attendanceData[rollNumber] = 'A';
+            saveToLocalStorage(); // ADD THIS LINE
+            renderTableView();
+        }
+
+        function updateTableCounts() {
+            const total = students.length;
+            const present = Object.values(attendanceData).filter(v => v === 'P').length;
+            const absent = total - present;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('presentCount').textContent = present;
+            document.getElementById('absentCount').textContent = absent;
+        }
+
+        
+         async function handleConfirmSubmit() {
+            // Check network status before attempting
+            if (!isOnline) {
+                alert('⚠️ You are currently offline. Please connect to the internet before submitting attendance.');
+                return;
+            }
+
+            // ADD THIS ENTIRE VALIDATION BLOCK HERE:
+            // ============================================
+            const records = JSON.parse(localStorage.getItem('pendingAttendance'));
+            const metadata = JSON.parse(localStorage.getItem('attendanceMetadata'));
+            
+            // Validate records exist
+            if (!records || records.length === 0) {
+                alert('❌ No attendance data found. Please mark attendance again.');
+                window.location.href = 'selection.html';
+                return;
+            }
+            
+            // Validate each record
+            const invalidRecords = records.filter(r => 
+                !r.roll_number || 
+                r.present === null || 
+                r.present === undefined || 
+                (r.present !== 'P' && r.present !== 'A') ||
+                !r.timestamp
+            );
+            
+            if (invalidRecords.length > 0) {
+                console.error('Invalid records found:', invalidRecords);
+                alert('❌ Some attendance data is corrupted. Please go back and mark attendance again.');
+                
+                // Clear corrupted data
+                localStorage.removeItem('pendingAttendance');
+                localStorage.removeItem('attendanceMetadata');
+                localStorage.removeItem('unsavedAttendance');
+                
+                window.location.href = 'selection.html';
+                return;
+            }
+            
+            // Validate metadata
+            if (!metadata || !metadata.sessionId || !metadata.topicId || !metadata.trainerId) {
+                alert('❌ Session information is incomplete. Please start over.');
+                window.location.href = 'selection.html';
+                return;
+            }
+            // ============================================
+
+            confirmSubmitBtn.disabled = true;
+            confirmSubmitBtn.textContent = 'Submitting...';
+
+
+    const maxRetries = 1;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+        try {
+            // Verify we're still online before each attempt
+            if (!isOnline) {
+                throw new Error('Lost internet connection');
+            }
+            
+            const records = JSON.parse(localStorage.getItem('pendingAttendance'));
+            const metadata = JSON.parse(localStorage.getItem('attendanceMetadata'));
+            
+            if (!records || records.length === 0 || !metadata) {
+                throw new Error('No attendance data found');
+            }
+
+            console.log('Submitting attendance via RPC function...');
+
+            // Call the atomic transaction function
+            const { data, error } = await supabaseClient.rpc('submit_attendance', {
+                p_department_id: metadata.departmentId,
+                p_date: metadata.date,
+                p_session_id: metadata.sessionId,
+                p_trainer_id: metadata.trainerId,
+                p_day_order: metadata.dayOrder,
+                p_topic_id: metadata.topicId,
+                p_attendance_records: records
+            });
+
+            if (error) {
+                // Check if it's a duplicate submission error
+                if (error.code === '23505' || error.message.includes('already exists')) {
+                    alert('⚠️ Attendance already exists for this department, date, and session.\n\nPlease check your records or contact support if this is unexpected.');
+                    confirmSubmitBtn.disabled = false;
+                    confirmSubmitBtn.textContent = 'Confirm & Submit';
+                    confirmModal.classList.remove('active');
+                    return; // Don't retry for duplicates
+                }
+                throw error;
+            }
+
+            console.log('Attendance submitted successfully:', data);
+
+            // Clean up all stored data
+            localStorage.removeItem('pendingAttendance');
+            localStorage.removeItem('attendanceMetadata');
+            localStorage.removeItem('unsavedAttendance');
+            localStorage.removeItem('backup_dayOrder');
+            localStorage.removeItem('backup_department');
+            localStorage.removeItem('backup_departmentId');
+            localStorage.removeItem('backup_departmentYear');
+            localStorage.removeItem('backup_trainerId');
+
+            alert('✅ Attendance submitted successfully!');
+            window.location.href = 'selection.html';
+            return; // Success - exit the retry loop
+            
+        } catch (error) {
+            attempt++;
+            console.error(`Attempt ${attempt} failed:`, error);
+            console.error('Full error object:', JSON.stringify(error, null, 2));
+            console.error('Error code:', error.code);
+            console.error('Error message:', error.message);
+            console.error('Error details:', error.details);
+            
+            // Log what we tried to send (for debugging)
+            if (attempt === 1) {
+                console.log('Attempted to send records:', records.length);
+                console.log('Metadata:', metadata);
+            }
+            
+            // Check connectivity before retrying
+            await updateNetworkStatus();
+            
+            if (attempt < maxRetries && isOnline) {
+                confirmSubmitBtn.textContent = `Retrying (${attempt}/${maxRetries})...`;
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+            } else {
+                // All retries failed or lost connection
+                const errorMsg = !isOnline 
+                    ? '❌ Lost internet connection. Your data is saved locally. Please reconnect and try again.'
+                    : `❌ Network error after ${maxRetries} attempts. Your data is saved locally. Please try submitting again.\n\nError: ${error.message}`;
+                
+                alert(errorMsg);
+                confirmSubmitBtn.disabled = false;
+                confirmSubmitBtn.textContent = 'Confirm & Submit';
+                confirmModal.classList.remove('active');
+                break;
+            }
+        }
+    }
+}
+
+
+
+
+        function handleBack() {
+            if (confirm('Are you sure you want to go back? Unsaved changes will be lost.')) {
+                // Clear all saved attendance data
+                localStorage.removeItem('unsavedAttendance');
+                localStorage.removeItem('pendingAttendance');
+                localStorage.removeItem('attendanceMetadata');
+                
+                // Clear backup session data
+                localStorage.removeItem('backup_dayOrder');
+                localStorage.removeItem('backup_department');
+                localStorage.removeItem('backup_departmentId');
+                localStorage.removeItem('backup_departmentYear');
+                localStorage.removeItem('backup_trainerId');
+                
+                // Clear all cache data
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('cache_')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                
+                window.location.href = 'selection.html';
+            }
+        }
+
+        async function checkFormComplete() {
+            // Check duplicate as soon as date AND session are selected
+            if (dateInput.value && sessionSelect.value) {
+                // CHANGE: Get session ID from map
+                const selectedSessionText = sessionSelect.value;
+                const selectedSessionId = sessionMap[selectedSessionText];
+                
+                const exists = await checkAttendanceExists(
+                    selectedDepartmentId,
+                    dateInput.value, 
+                    selectedSessionId // CHANGE: Pass session ID instead of text
+                );
+                
+                if (exists) {
+                    alert(`⚠️ Attendance already captured for:\n\nDepartment: ${selectedDepartment}\nDate: ${dateInput.value}\nSession: ${sessionSelect.value}\n\nPlease select a different session.`);
+                    sessionSelect.value = ''; // Reset session selection
+                    topicSelect.value = ''; // Also reset topic if selected
+                    return;
+                }
+            }
+            
+            // Only show card view when ALL fields are filled
+            if (dateInput.value && sessionSelect.value && topicSelect.value) {
+                selectedTopicId = parseInt(topicSelect.value);
+                
+                // Show card view
+                currentStudentIndex = 0;
+                cardView.style.display = 'block';
+                renderCurrentCard();
+            }
+        }
+
+        
+        async function initialize() {
+            // Try to restore session data from backup
+            restoreSessionData();
+            
+            // Check if we have the required session data
+            if (!selectedDayOrder || !selectedDepartment || !trainerId) {
+                alert('Please select day order and department first');
+                window.location.href = 'selection.html';
+                return;
+            }
+
+            // Backup session data for future refreshes
+            backupSessionData();
+
+            await checkAuth();
+
+            await updateNetworkStatus();
+
+            document.getElementById('dayOrderValue').textContent = selectedDayOrder;
+            document.getElementById('departmentValue').textContent = selectedDepartment;
+
+            dateInput.value = new Date().toISOString().split('T')[0];
+
+            // LOAD ALL THREE IN PARALLEL - MUCH FASTER!
+            await Promise.all([
+                loadSessions(),
+                loadTopics(),
+                loadStudents()
+            ]);
+
+            // Restore any saved data silently
+            const hasRestoredData = loadFromLocalStorage();
+
+
+            // Validate attendanceData after restore
+            students.forEach(student => {
+                const value = attendanceData[student.roll_number];
+                if (value !== 'P' && value !== 'A') {
+                    console.warn(`Student ${student.roll_number} had invalid value (${value}), setting to present`);
+                    attendanceData[student.roll_number] = 'P';
+                }
+            });
+
+            // ADD THIS NOTIFICATION BLOCK:
+            // ============================================
+            if (hasRestoredData && dateInput.value && sessionSelect.value && topicSelect.value) {
+                // Show that we restored previous work
+                const savedData = JSON.parse(localStorage.getItem('unsavedAttendance'));
+                const savedTime = new Date(savedData.timestamp).toLocaleString();
+                
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 70px;
+                    right: 20px;
+                    background: #2563eb;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 1000;
+                    font-size: 14px;
+                `;
+                notification.innerHTML = `
+                    ℹ️ Restored your previous work from ${savedTime}
+                    <button onclick="this.parentElement.remove()" style="
+                        background: rgba(255,255,255,0.2);
+                        border: none;
+                        color: white;
+                        padding: 4px 12px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        margin-left: 10px;
+                    ">OK</button>
+                `;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => notification.remove(), 5000);
+                
+                cardView.style.display = 'block';
+                renderCurrentCard();
+            } else if (hasRestoredData) {
+                // Had data but it was incomplete
+                console.log('Partial data restored, user needs to complete the form');
+            }
+            // ============================================
+            else if (hasRestoredData && dateInput.value && sessionSelect.value && topicSelect.value) {
+                cardView.style.display = 'block';
+                renderCurrentCard();
+            }
+
+            // CRITICAL: Validate attendanceData after restore
+            students.forEach(student => {
+                const value = attendanceData[student.roll_number];
+                if (value !== true && value !== false) {
+                    console.warn(`Student ${student.roll_number} had invalid value (${value}), setting to present`);
+                    attendanceData[student.roll_number] = true;
+                }
+            });
+
+            if (hasRestoredData && dateInput.value && sessionSelect.value && topicSelect.value) {
+                cardView.style.display = 'block';
+                renderCurrentCard();
+            }
+
+            loadingDiv.style.display = 'none';
+            attendanceForm.style.display = 'block';
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+        dateInput.addEventListener('change', checkFormComplete);
+        sessionSelect.addEventListener('change', checkFormComplete);
+        topicSelect.addEventListener('change', checkFormComplete);
+        attendanceBtn.addEventListener('click', toggleAttendance);
+        btnBack.addEventListener('click', goToPreviousStudent);
+        btnNext.addEventListener('click', goToNextStudent);
+        editBtn.addEventListener('click', handleEdit);
+        confirmSubmitBtn.addEventListener('click', handleConfirmSubmit);
+        tableSaveBtn.addEventListener('click', handleSave);
+        backBtn.addEventListener('click', handleBack);
+
+        // Initialize on page load
+        initialize();
+    </script>
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+</body>
+</html>

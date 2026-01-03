@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Select Console</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: white;
+        }
+
+        .user-details {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .user-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .console-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .console-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .console-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .console-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .console-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .console-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .console-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .console-description {
+            font-size: 1rem;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .console-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .console-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+            padding: 40px;
+        }
+
+        .error {
+            background: rgba(220, 38, 38, 0.9);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .console-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .console-card {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Admin Portal</h1>
+            <p>Choose your console</p>
+        </div>
+
+        <div class="user-info" id="userInfoSection" style="display: none;">
+            <div class="user-details">
+                <div class="user-avatar" id="userAvatar"></div>
+                <div>
+                    <div class="user-name" id="userName">Loading...</div>
+                </div>
+            </div>
+            <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
+
+        <div class="error" id="errorDiv"></div>
+        <div class="loading" id="loadingDiv">Loading...</div>
+
+        <div class="console-grid" id="consoleGrid" style="display: none;">
+            <div class="console-card" onclick="navigateToAdminConsole()">
+                <span class="console-icon">⚙️</span>
+                <h2 class="console-title">Admin Console</h2>
+                <p class="console-description">
+                    Manage students, trainers, departments, topics, sessions, and view comprehensive attendance records.
+                </p>
+                <button class="console-btn">Open Admin Console</button>
+            </div>
+
+            <div class="console-card" onclick="navigateToAssessmentConsole()">
+                <span class="console-icon">📊</span>
+                <h2 class="console-title">Assessment Console</h2>
+                <p class="console-description">
+                    Access assessment tools, student grouping, extempore evaluations, and performance tracking.
+                </p>
+                <button class="console-btn">Open Assessment Console</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // DOM ELEMENTS
+        // ========================================
+        const elements = {
+            loadingDiv: document.getElementById('loadingDiv'),
+            errorDiv: document.getElementById('errorDiv'),
+            consoleGrid: document.getElementById('consoleGrid'),
+            userInfoSection: document.getElementById('userInfoSection'),
+            userName: document.getElementById('userName'),
+            userAvatar: document.getElementById('userAvatar'),
+            logoutBtn: document.getElementById('logoutBtn')
+        };
+
+        // ========================================
+        // UTILITY FUNCTIONS
+        // ========================================
+        function showError(message) {
+            elements.errorDiv.textContent = message;
+            elements.errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                elements.errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            elements.loadingDiv.style.display = show ? 'block' : 'none';
+            elements.consoleGrid.style.display = show ? 'none' : 'grid';
+            elements.userInfoSection.style.display = show ? 'none' : 'flex';
+        }
+
+        // ========================================
+        // AUTHENTICATION
+        // ========================================
+        async function checkAuth() {
+            try {
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                
+                if (error) throw error;
+                
+                if (!session) {
+                    window.location.href = 'index.html';
+                    return null;
+                }
+                
+                return session;
+            } catch (error) {
+                console.error('Auth check error:', error);
+                showError('Authentication error. Redirecting to login...');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+                return null;
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await supabaseClient.auth.signOut();
+                window.location.href = '../index.html';  // Make sure this has ../
+            } catch (error) {
+                console.error('Logout error:', error);
+                showError('Error logging out. Please try again.');
+            }
+        }
+
+        // ========================================
+        // DATA LOADING
+        // ========================================
+        async function loadTrainerData(email) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('trainers')
+                    .select('*')
+                    .eq('mail_id', email)
+                    .single();
+
+                if (error) {
+                    if (error.code === 'PGRST116') {
+                        throw new Error(`Admin not found. Please contact system administrator.`);
+                    }
+                    throw error;
+                }
+
+                if (!data) {
+                    throw new Error('Admin data not found.');
+                }
+
+                // Add this check for vendor field
+                if (data.vendor !== 'admin') {
+                    throw new Error('Access denied. Admin privileges required.');
+                }
+
+                return data;
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+                throw error;
+            }
+        }
+
+        // ========================================
+        // NAVIGATION
+        // ========================================
+        function navigateToAdminConsole() {
+            window.location.href = 'admin.html';
+        }
+
+        function navigateToAssessmentConsole() {
+            window.location.href = '../assessment_evaluation/handover.html';
+        }
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+        async function initialize() {
+            try {
+                showLoading(true);
+                
+                const session = await checkAuth();
+                if (!session) return;
+
+                const trainerData = await loadTrainerData(session.user.email);
+                
+                elements.userName.textContent = trainerData.name;
+                elements.userAvatar.textContent = trainerData.name.charAt(0).toUpperCase();
+
+                showLoading(false);
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError(error.message || 'Failed to load admin portal.');
+                
+                // If not authorized, redirect back to main page after showing error
+                if (error.message.includes('Access denied') || error.message.includes('Admin not found')) {
+                    setTimeout(() => {
+                        window.location.href = '../index.html';
+                    }, 3000);
+                }
+            }
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+        elements.logoutBtn.addEventListener('click', handleLogout);
+
+        // Initialize on page load
+        initialize();
+    </script>
+</body>
+</html>

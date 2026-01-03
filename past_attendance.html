@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Past Attendance</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="past_attendance_styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="back-btn" id="backBtn">← Back to Selection</div>
+        <div class="selection-info">
+            <div class="info-item">
+                <div class="info-label">Day Order</div>
+                <div class="info-value" id="dayOrderValue">-</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Department</div>
+                <div class="info-value" id="departmentValue">-</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>View Past Attendance</h2>
+
+        <div id="loadingDiv" class="loading">Loading...</div>
+
+        <div id="dateSelectionDiv" style="display: none;">
+            <div class="form-group">
+                <label for="dateSelect">Select Date</label>
+                <select id="dateSelect" required>
+                    <option value="">Choose a date</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="attendanceDisplay" style="display: none;">
+            <div class="attendance-header">
+                <div class="header-info">
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span class="info-value" id="displayDate">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Session:</span>
+                        <span class="info-value" id="displaySession">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Topic:</span>
+                        <span class="info-value" id="displayTopic">-</span>
+                    </div>
+                </div>
+                <div class="summary-stats">
+                    <div class="stat-item present-stat">
+                        <div class="stat-number" id="presentCount">0</div>
+                        <div class="stat-label">Present</div>
+                    </div>
+                    <div class="stat-item absent-stat">
+                        <div class="stat-number" id="absentCount">0</div>
+                        <div class="stat-label">Absent</div>
+                    </div>
+                    <div class="stat-item total-stat">
+                        <div class="stat-number" id="totalCount">0</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="student-list" id="studentList"></div>
+        </div>
+
+        <div id="noDataDiv" class="no-data" style="display: none;">
+            <div class="no-data-icon">📋</div>
+            <p>No attendance records found for the selected date</p>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // STATE MANAGEMENT
+        // ========================================
+        let selectedDayOrder = sessionStorage.getItem('selectedDayOrder');
+        let selectedDepartment = sessionStorage.getItem('selectedDepartment');
+        let selectedDepartmentId = parseInt(sessionStorage.getItem('selectedDepartmentId'));
+        let selectedDepartmentYear = parseInt(sessionStorage.getItem('selectedDepartmentYear'));  // ADD THIS LINE
+        let availableDates = [];
+        let currentAttendanceData = null;
+
+        // ========================================
+        // DOM ELEMENTS
+        // ========================================
+        const loadingDiv = document.getElementById('loadingDiv');
+        const dateSelectionDiv = document.getElementById('dateSelectionDiv');
+        const dateSelect = document.getElementById('dateSelect');
+        const attendanceDisplay = document.getElementById('attendanceDisplay');
+        const studentList = document.getElementById('studentList');
+        const noDataDiv = document.getElementById('noDataDiv');
+        const backBtn = document.getElementById('backBtn');
+
+        // ========================================
+        // FUNCTIONS
+        // ========================================
+
+        async function checkAuth() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                window.location.href = 'index.html';
+                return false;
+            }
+            return true;
+        }
+
+        async function loadAvailableDates() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('attendance_sessions')
+                    .select('date, session_id, sessions(session), topics(topic_name), id')
+                    .eq('department_id', selectedDepartmentId)
+                    .order('date', { ascending: false });
+
+                if (error) throw error;
+
+                availableDates = data || [];
+                renderDateOptions();
+            } catch (error) {
+                console.error('Error loading dates:', error);
+                alert('Error loading attendance dates. Please try again.');
+            }
+        }
+
+        function renderDateOptions() {
+            dateSelect.innerHTML = '<option value="">Choose a date</option>';
+
+            if (availableDates.length === 0) {
+                dateSelect.innerHTML = '<option value="">No attendance records found</option>';
+                return;
+            }
+
+            availableDates.forEach((record, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                const dateObj = new Date(record.date);
+                const formattedDate = dateObj.toLocaleDateString('en-IN', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric' 
+                });
+                option.textContent = `${formattedDate} - ${record.sessions.session}`;
+                dateSelect.appendChild(option);
+            });
+        }
+
+        async function loadAttendanceForDate(sessionRecord) {
+            try {
+                loadingDiv.style.display = 'block';
+                attendanceDisplay.style.display = 'none';
+                noDataDiv.style.display = 'none';
+
+                // Load attendance records
+                const { data: attendanceData, error: attendanceError } = await supabaseClient
+                    .from('attendance')
+                    .select('roll_number, present')
+                    .eq('session_id', sessionRecord.id)
+                    .order('roll_number');
+
+                if (attendanceError) throw attendanceError;
+
+                if (!attendanceData || attendanceData.length === 0) {
+                    loadingDiv.style.display = 'none';
+                    noDataDiv.style.display = 'block';
+                    return;
+                }
+
+                // Load student details
+                const rollNumbers = attendanceData.map(a => a.roll_number);
+                const { data: studentsData, error: studentsError } = await supabaseClient
+                    .from('students')
+                    .select('roll_number, name')
+                    .in('roll_number', rollNumbers)
+                    .order('roll_number');
+
+                if (studentsError) throw studentsError;
+
+                // Merge data
+                const mergedData = attendanceData.map(att => {
+                    const student = studentsData.find(s => s.roll_number === att.roll_number);
+                    return {
+                        roll_number: att.roll_number,
+                        name: student ? student.name : 'Unknown',
+                        present: att.present
+                    };
+                });
+
+                currentAttendanceData = {
+                    date: sessionRecord.date,
+                    session: sessionRecord.sessions.session,
+                    topic: sessionRecord.topics.topic_name,
+                    students: mergedData
+                };
+
+                displayAttendance();
+            } catch (error) {
+                console.error('Error loading attendance:', error);
+                alert('Error loading attendance details. Please try again.');
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        function displayAttendance() {
+            if (!currentAttendanceData) return;
+
+            // Format date
+            const dateObj = new Date(currentAttendanceData.date);
+            const formattedDate = dateObj.toLocaleDateString('en-IN', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric' 
+            });
+
+            // Update header info
+            document.getElementById('displayDate').textContent = formattedDate;
+            document.getElementById('displaySession').textContent = currentAttendanceData.session;
+            document.getElementById('displayTopic').textContent = currentAttendanceData.topic;
+
+            // Calculate stats
+            const presentStudents = currentAttendanceData.students.filter(s => s.present === 'P' || s.present.startsWith('P:'));
+            const absentStudents = currentAttendanceData.students.filter(s => s.present === 'A' || s.present.startsWith('A:'));
+
+            document.getElementById('presentCount').textContent = presentStudents.length;
+            document.getElementById('absentCount').textContent = absentStudents.length;
+            document.getElementById('totalCount').textContent = currentAttendanceData.students.length;
+
+            // Render student list
+            studentList.innerHTML = '';
+            currentAttendanceData.students.forEach(student => {
+                const item = document.createElement('div');
+                // Determine if mainly present or absent for styling
+                const isPresent = student.present === 'P' || student.present.startsWith('P:');
+
+                item.className = `student-item ${isPresent ? 'present' : 'absent'}`;
+                item.innerHTML = `
+                    <div class="student-info">
+                        <div class="student-roll">${student.roll_number}</div>
+                        <div class="student-name">${student.name}</div>
+                    </div>
+                    <div class="status-badge ${isPresent ? 'status-present' : 'status-absent'}">
+                        ${student.present}
+                    </div>
+                `;
+                studentList.appendChild(item);
+            });
+
+            loadingDiv.style.display = 'none';
+            attendanceDisplay.style.display = 'block';
+        }
+
+        async function initialize() {
+            if (!selectedDayOrder || !selectedDepartment || !selectedDepartmentId) {
+                alert('Please select day order and department first');
+                window.location.href = 'selection.html';
+                return;
+            }
+
+            await checkAuth();
+
+            document.getElementById('dayOrderValue').textContent = selectedDayOrder;
+            document.getElementById('departmentValue').textContent = selectedDepartment;
+
+            await loadAvailableDates();
+
+            loadingDiv.style.display = 'none';
+            dateSelectionDiv.style.display = 'block';
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+        
+        dateSelect.addEventListener('change', function() {
+            if (this.value === '') {
+                attendanceDisplay.style.display = 'none';
+                noDataDiv.style.display = 'none';
+                return;
+            }
+
+            const selectedIndex = parseInt(this.value);
+            const sessionRecord = availableDates[selectedIndex];
+            loadAttendanceForDate(sessionRecord);
+        });
+
+        backBtn.addEventListener('click', function() {
+            window.location.href = 'selection.html';
+        });
+
+        // Initialize on page load
+        initialize();
+    </script>
+</body>
+</html>

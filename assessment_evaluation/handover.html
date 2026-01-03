@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Assessment Type</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="handover_styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div class="user-details">
+                <h3 id="userName">Loading...</h3>
+                <p id="userVendor">-</p>
+            </div>
+        </div>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+    </div>
+
+    <div class="container">
+        <div class="back-button" id="backBtn">
+            <span>←</span> Back to Selection
+        </div>
+
+        <div class="page-header">
+            <h1>Select Assessment Type</h1>
+            <p class="subtitle">Choose the type of evaluation you want to perform</p>
+        </div>
+
+        <div id="errorDiv" class="error" style="display: none;"></div>
+        <div id="loadingDiv" class="loading">Loading...</div>
+
+        <div class="assessment-grid" id="assessmentGrid" style="display: none;">
+            <div class="assessment-card" data-type="extempore">
+                <div class="card-title">Extempore Evaluation</div>
+            </div>
+
+            <div class="assessment-card" data-type="group_activity">
+                <div class="card-title">I UG - Group Activity</div>
+            </div>
+
+            <div class="assessment-card" data-type="presentation">
+                <div class="card-title">II UG - Presentation</div>
+            </div>
+
+            <div class="assessment-card" data-type="absentees">
+                <div class="card-title">Absentees Evaluation</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // STATE MANAGEMENT
+        // ========================================
+        const state = {
+            trainerId: null,
+            trainerName: null,
+            trainerVendor: null
+        };
+
+        // ========================================
+        // DOM ELEMENTS
+        // ========================================
+        const elements = {
+            backBtn: document.getElementById('backBtn'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            userAvatar: document.getElementById('userAvatar'),
+            userName: document.getElementById('userName'),
+            userVendor: document.getElementById('userVendor'),
+            loadingDiv: document.getElementById('loadingDiv'),
+            errorDiv: document.getElementById('errorDiv'),
+            assessmentGrid: document.getElementById('assessmentGrid')
+        };
+
+        // ========================================
+        // UTILITY FUNCTIONS
+        // ========================================
+
+        function showError(message) {
+            elements.errorDiv.textContent = message;
+            elements.errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                elements.errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            elements.loadingDiv.style.display = show ? 'block' : 'none';
+            elements.assessmentGrid.style.display = show ? 'none' : 'grid';
+        }
+
+        function getSessionData() {
+            state.trainerId = sessionStorage.getItem('trainerId');
+            state.trainerName = sessionStorage.getItem('trainerName');
+            state.trainerVendor = sessionStorage.getItem('trainerVendor');
+
+            if (!state.trainerId || !state.trainerName) {
+                showError('Session expired. Please go back and try again.');
+                setTimeout(() => {
+                    window.location.href = 'selection.html';
+                }, 2000);
+                return false;
+            }
+
+            elements.userName.textContent = state.trainerName;
+            elements.userVendor.textContent = state.trainerVendor;
+            elements.userAvatar.textContent = state.trainerName.charAt(0).toUpperCase();
+
+            return true;
+        }
+
+        function storeAssessmentType(type) {
+            sessionStorage.setItem('assessmentType', type);
+        }
+
+        // ========================================
+        // NAVIGATION
+        // ========================================
+
+        function handleAssessmentSelection(type) {
+            storeAssessmentType(type);
+
+            // Route based on assessment type
+            if (type === 'absentees') {
+                // Absentees goes directly without department selection
+                window.location.href = 'absentees/absentees.html';
+            } else {
+                // Others need department selection first
+                window.location.href = 'department_selection.html';
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await supabaseClient.auth.signOut();
+                window.location.href = '../index.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                showError('Error logging out. Please try again.');
+            }
+        }
+
+        function handleBack() {
+            window.location.href = '../selection.html';
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+
+        elements.backBtn.addEventListener('click', handleBack);
+        elements.logoutBtn.addEventListener('click', handleLogout);
+
+        document.addEventListener('click', (e) => {
+            const card = e.target.closest('.assessment-card');
+            if (card) {
+                const type = card.dataset.type;
+                handleAssessmentSelection(type);
+            }
+        });
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+
+        async function initialize() {
+            try {
+                showLoading(true);
+
+                // Check authentication
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                
+                if (error || !session) {
+                    showError('Please login first');
+                    setTimeout(() => {
+                        window.location.href = '../index.html';
+                    }, 2000);
+                    return;
+                }
+
+                // Get session data
+                if (!getSessionData()) return;
+
+                showLoading(false);
+
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError('Error loading page: ' + error.message);
+                showLoading(false);
+            }
+        }
+
+        initialize();
+    </script>
+</body>
+</html>

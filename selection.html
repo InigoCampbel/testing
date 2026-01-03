@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Day Order & Department</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="s_styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar"></div>
+            <div class="user-details">
+                <h3 id="userName">Loading...</h3>
+                <p id="userVendor">-</p>
+            </div>
+        </div>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+    </div>
+
+    <div class="container">
+        <div class="step-indicator">
+            <div class="step-line"></div>
+            <div class="step active" id="step1">
+                <div class="step-number">1</div>
+                <div class="step-label">Day Order</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-number">2</div>
+                <div class="step-label">Department</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-number">3</div>
+                <div class="step-label">Action</div>
+            </div>
+        </div>
+
+        <div id="errorDiv" class="error" style="display: none;"></div>
+        <div id="loadingDiv" class="loading">Loading your data...</div>
+
+        <!-- Day Order Selection -->
+        <!-- Action Buttons Section at Top -->
+        <div class="top-actions-section" id="topActionsSection" style="display: none;">
+            <!-- Attendance Change Request -->
+            <div class="action-card attendance-card">
+                <a href="https://forms.gle/7fNLsa9BnA92TaPr8" 
+                class="action-btn attendance-btn" 
+                target="_blank">
+                    <span>Attendance Change Request</span>
+                </a>
+            </div>
+
+            <!-- Assessment Evaluation -->
+            <div class="action-card assessment-card">
+                <button class="action-btn assessment-btn" id="assessmentEvaluationBtn">
+                    <span>Assessment Evaluation</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Day Order Selection -->
+        <div class="section hidden" id="dayOrderSection">
+            <h2>Select Day Order</h2>
+            <p class="subtitle">Choose the day order for attendance</p>
+            <div class="card-grid day-order-grid" id="dayOrderGrid"></div>
+        </div>
+
+        <!-- Department Selection -->
+        <div class="section hidden" id="departmentSection">
+            <div class="back-button" id="backBtn">
+                <span>←</span> Back to Day Order
+            </div>
+            <h2>Select Department</h2>
+            <p class="subtitle">Choose the department for Day Order <span id="selectedDayOrder"></span></p>
+            
+            <!-- Search Bar -->
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="departmentSearch" 
+                    class="search-input" 
+                    placeholder="Search departments..."
+                    autocomplete="off"
+                />
+                <span class="search-icon">🔍</span>
+            </div>
+            
+            <div class="card-grid" id="departmentGrid"></div>
+        </div>
+
+        <!-- Selection Summary -->
+        <div class="selection-summary hidden" id="selectionSummary">
+            <div class="summary-content">
+                <div class="summary-item">
+                    <span class="summary-label">Day Order:</span>
+                    <span class="summary-value" id="summaryDayOrder">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Department:</span>
+                    <span class="summary-value" id="summaryDepartment">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="button-container hidden" id="buttonContainer">
+            <button class="next-btn view-students-btn" id="viewStudentsBtn">View Student Details</button>
+            <button class="next-btn mark-attendance-btn" id="markAttendanceBtn">Mark Attendance</button>
+            <button class="next-btn view-past-attendance-btn" id="viewPastAttendanceBtn">View Past Attendance</button>
+            <button class="next-btn student-grouping-btn" id="studentGroupingBtn">Student Grouping</button>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SUPABASE CONFIGURATION
+        // ========================================
+        const SUPABASE_URL = 'https://sjgcgesoxyjgknrcaldj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqZ2NnZXNveHlqZ2tucmNhbGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwMDYxODYsImV4cCI6MjA3ODU4MjE4Nn0.q_E-B_3xqMsXnQdQVjGOSUzINuMGwby7waPOg5nHdM0';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ========================================
+        // STATE MANAGEMENT
+        // ========================================
+        const state = {
+            currentTrainer: null,
+            selectedDayOrder: null,
+            selectedDepartment: null,
+            selectedDepartmentId: null,
+            selectedDepartmentYear: null,
+            allDayOrders: [],
+            filteredDepartments: [],
+            uniqueDayOrderNumbers: []
+        };
+
+        // ========================================
+        // DOM ELEMENTS
+        // ========================================
+        const elements = {
+            loadingDiv: document.getElementById('loadingDiv'),
+            errorDiv: document.getElementById('errorDiv'),
+            dayOrderSection: document.getElementById('dayOrderSection'),
+            attendanceRequestSection: document.getElementById('attendanceRequestSection'),
+            departmentSection: document.getElementById('departmentSection'),
+            dayOrderGrid: document.getElementById('dayOrderGrid'),
+            departmentGrid: document.getElementById('departmentGrid'),
+            buttonContainer: document.getElementById('buttonContainer'),
+            viewStudentsBtn: document.getElementById('viewStudentsBtn'),
+            markAttendanceBtn: document.getElementById('markAttendanceBtn'),
+            viewPastAttendanceBtn: document.getElementById('viewPastAttendanceBtn'),
+            studentGroupingBtn: document.getElementById('studentGroupingBtn'),
+            backBtn: document.getElementById('backBtn'),
+            userAvatar: document.getElementById('userAvatar'),
+            userName: document.getElementById('userName'),
+            userVendor: document.getElementById('userVendor'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            selectionSummary: document.getElementById('selectionSummary'),
+            summaryDayOrder: document.getElementById('summaryDayOrder'),
+            summaryDepartment: document.getElementById('summaryDepartment'),
+            step1: document.getElementById('step1'),
+            step2: document.getElementById('step2'),
+            step3: document.getElementById('step3'),
+            selectedDayOrderSpan: document.getElementById('selectedDayOrder')
+        };
+
+        // ========================================
+        // UTILITY FUNCTIONS
+        // ========================================
+
+        function showError(message) {
+            elements.errorDiv.textContent = message;
+            elements.errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                elements.errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            if (show) {
+                elements.loadingDiv.classList.remove('hidden');
+                elements.dayOrderSection.classList.add('hidden');
+                elements.departmentSection.classList.add('hidden');
+            } else {
+                elements.loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function updateStepIndicator(activeStep) {
+            elements.step1.classList.remove('active');
+            elements.step2.classList.remove('active');
+            elements.step3.classList.remove('active');
+            
+            if (activeStep >= 1) elements.step1.classList.add('active');
+            if (activeStep >= 2) elements.step2.classList.add('active');
+            if (activeStep >= 3) elements.step3.classList.add('active');
+        }
+
+        function updateSummary() {
+            if (state.selectedDayOrder && state.selectedDepartment) {
+                elements.summaryDayOrder.textContent = state.selectedDayOrder;
+                elements.summaryDepartment.textContent = state.selectedDepartment;
+                elements.selectionSummary.classList.remove('hidden');
+            } else {
+                elements.selectionSummary.classList.add('hidden');
+            }
+        }
+
+        function scrollToSection(element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ========================================
+        // AUTHENTICATION
+        // ========================================
+
+        async function checkAuth() {
+            try {
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                
+                if (error) throw error;
+                
+                if (!session) {
+                    window.location.href = 'index.html';
+                    return null;
+                }
+                
+                return session;
+            } catch (error) {
+                console.error('Auth check error:', error);
+                showError('Authentication error. Redirecting to login...');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+                return null;
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await supabaseClient.auth.signOut();
+                window.location.href = 'index.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                showError('Error logging out. Please try again.');
+            }
+        }
+
+        // ========================================
+        // DATA LOADING
+        // ========================================
+
+        async function loadTrainerData(email) {
+            try {
+                console.log('Loading trainer data for email:', email);
+                
+                const { data, error } = await supabaseClient
+                    .from('trainers')
+                    .select('*')
+                    .eq('mail_id', email)
+                    .single();
+
+                if (error) {
+                    if (error.code === 'PGRST116') {
+                        throw new Error(`Trainer not found. Please contact admin to add ${email} to the system.`);
+                    }
+                    throw error;
+                }
+
+                if (!data) {
+                    throw new Error('Trainer data not found.');
+                }
+
+                console.log('Trainer loaded:', data);
+                return data;
+            } catch (error) {
+                console.error('Error loading trainer:', error);
+                throw error;
+            }
+        }
+
+        async function loadDayOrders(vendor) {
+            try {
+                console.log('Loading day orders for vendor:', vendor);
+                
+                const { data, error } = await supabaseClient
+                    .from('day_order')
+                    .select('*, departments(*)')
+                    .eq('vendor', vendor)
+                    .order('day_order');
+
+                console.log('=== RAW DATA FROM SUPABASE ===');
+                console.log(JSON.stringify(data, null, 2));
+                console.log('=== END RAW DATA ===');
+
+                if (error) throw error;
+                
+                if (!data || data.length === 0) {
+                    return [];
+                }
+                
+                data.forEach((item, index) => {
+                    console.log(`Item ${index}:`, item);
+                    console.log(`  - department_id:`, item.department_id);
+                    console.log(`  - departments object:`, item.departments);
+                    console.log(`  - departments.name:`, item.departments?.name);
+                });
+                
+                const transformedData = data.map(item => ({
+                    id: item.id,
+                    vendor: item.vendor,
+                    day_order: item.day_order,
+                    department_id: item.department_id,
+                    department_name: item.departments?.name || 'Unknown',
+                    year: item.departments?.year || 0  
+                }));
+                
+                console.log('Transformed data:', transformedData);
+                return transformedData;
+                
+            } catch (error) {
+                console.error('Error loading day orders:', error);
+                throw error;
+            }
+        }
+
+        // ========================================
+        // UI RENDERING
+        // ========================================
+
+        function renderDayOrders() {
+            elements.dayOrderGrid.innerHTML = '';
+            
+            if (state.uniqueDayOrderNumbers.length === 0) {
+                elements.dayOrderGrid.innerHTML = '<p class="empty-state">No day orders available</p>';
+                return;
+            }
+            
+            state.uniqueDayOrderNumbers.forEach(dayOrder => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.setAttribute('data-day-order', dayOrder);
+                card.innerHTML = `
+                    <div class="card-number">${dayOrder}</div>
+                    <div class="card-label">Day Order</div>
+                `;
+                card.addEventListener('click', () => handleDayOrderSelection(dayOrder));
+                elements.dayOrderGrid.appendChild(card);
+            });
+        }
+
+        function renderDepartments() {
+            elements.departmentGrid.innerHTML = '';
+            
+            if (state.filteredDepartments.length === 0) {
+                elements.departmentGrid.innerHTML = '<p class="empty-state">No departments found for this day order</p>';
+                return;
+            }
+            
+            const searchInput = document.getElementById('departmentSearch');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            
+            const visibleDepartments = searchTerm 
+                ? state.filteredDepartments.filter(dept => 
+                    dept.department_name.toLowerCase().includes(searchTerm)
+                )
+                : state.filteredDepartments;
+
+            if (visibleDepartments.length === 0) {
+                elements.departmentGrid.innerHTML = '<p class="empty-state">No departments match your search</p>';
+                return;
+            }
+
+            visibleDepartments.forEach(dept => {
+                const card = document.createElement('div');
+                card.className = 'card dept-card';
+                card.setAttribute('data-department', dept.department_name);
+                card.setAttribute('data-department-id', dept.department_id);
+                card.innerHTML = `
+                    <div class="dept-name">${dept.department_name}</div>
+                `;
+                card.addEventListener('click', () => handleDepartmentSelection(dept.department_name, dept.department_id, dept.year));
+                elements.departmentGrid.appendChild(card);
+            });
+        }
+
+        // ========================================
+        // USER INTERACTIONS
+        // ========================================
+
+        function handleDayOrderSelection(dayOrder) {
+            state.selectedDayOrder = dayOrder;
+            state.selectedDepartment = null;
+            
+            document.querySelectorAll('#dayOrderGrid .card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.querySelector(`#dayOrderGrid .card[data-day-order="${dayOrder}"]`)?.classList.add('selected');
+            
+            // Filter and sort departments alphabetically
+            state.filteredDepartments = state.allDayOrders
+                .filter(d => d.day_order === dayOrder)
+                .sort((a, b) => a.department_name.localeCompare(b.department_name));
+            
+            console.log('Filtered departments:', state.filteredDepartments);
+            
+            renderDepartments();
+            
+            const searchInput = document.getElementById('departmentSearch');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.addEventListener('input', renderDepartments);
+            }
+
+            elements.departmentSection.classList.remove('hidden');
+            elements.selectedDayOrderSpan.textContent = dayOrder;
+            elements.buttonContainer.classList.add('hidden');
+            
+            updateStepIndicator(2);
+            updateSummary();
+            
+            setTimeout(() => scrollToSection(elements.departmentSection), 100);
+        }
+
+        function handleDepartmentSelection(department, departmentId, departmentYear) {
+            state.selectedDepartment = department;
+            state.selectedDepartmentId = departmentId;
+            state.selectedDepartmentYear = departmentYear;
+            
+            console.log('Selected department:', department, 'ID:', departmentId);
+            
+            document.querySelectorAll('#departmentGrid .card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.querySelector(`#departmentGrid .card[data-department="${department}"]`)?.classList.add('selected');
+            
+            elements.buttonContainer.classList.remove('hidden');
+            
+            updateStepIndicator(3);
+            updateSummary();
+            
+            setTimeout(() => scrollToSection(elements.buttonContainer), 100);
+        }
+
+        function handleBackButton() {
+            state.selectedDepartment = null;
+            state.filteredDepartments = [];
+            
+            elements.departmentSection.classList.add('hidden');
+            elements.buttonContainer.classList.add('hidden');
+            elements.dayOrderSection.classList.remove('hidden');
+            
+            updateStepIndicator(1);
+            updateSummary();
+            
+            scrollToSection(elements.dayOrderSection);
+        }
+
+        function storeSessionData() {
+            sessionStorage.setItem('selectedDayOrder', state.selectedDayOrder);
+            sessionStorage.setItem('selectedDepartment', state.selectedDepartment);
+            sessionStorage.setItem('selectedDepartmentId', state.selectedDepartmentId);
+            sessionStorage.setItem('selectedDepartmentYear', state.selectedDepartmentYear);  // ADD THIS LINE
+            sessionStorage.setItem('trainerId', state.currentTrainer.trainer_id);
+            sessionStorage.setItem('trainerName', state.currentTrainer.name);
+            sessionStorage.setItem('trainerVendor', state.currentTrainer.vendor);
+        }
+
+        function handleViewStudents() {
+            if (!state.selectedDayOrder || !state.selectedDepartment || !state.selectedDepartmentId) {
+                showError('Please select both day order and department');
+                return;
+            }
+            
+            try {
+                storeSessionData();
+                window.location.href = 'students.html';
+            } catch (error) {
+                console.error('Error navigating to students:', error);
+                showError('Error proceeding to students page. Please try again.');
+            }
+        }
+
+        function handleMarkAttendance() {
+            if (!state.selectedDayOrder || !state.selectedDepartment || !state.selectedDepartmentId) {
+                showError('Please select both day order and department');
+                return;
+            }
+            
+            try {
+                storeSessionData();
+                window.location.href = 'attendance.html';
+            } catch (error) {
+                console.error('Error navigating to attendance:', error);
+                showError('Error proceeding to attendance. Please try again.');
+            }
+        }
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+
+        async function initialize() {
+            try {
+                showLoading(true);
+                
+                const session = await checkAuth();
+                if (!session) return;
+
+                console.log('User session:', session.user);
+                console.log('User email:', session.user.email);
+
+                state.currentTrainer = await loadTrainerData(session.user.email);
+                
+                elements.userName.textContent = state.currentTrainer.name;
+                elements.userVendor.textContent = state.currentTrainer.vendor;
+                elements.userAvatar.textContent = state.currentTrainer.name.charAt(0).toUpperCase();
+
+                state.allDayOrders = await loadDayOrders(state.currentTrainer.vendor);
+                
+                state.uniqueDayOrderNumbers = [...new Set(state.allDayOrders.map(d => d.day_order))].sort((a, b) => a - b);
+                
+                console.log('Unique day orders:', state.uniqueDayOrderNumbers);
+                
+                renderDayOrders();
+                
+                const topActionsSection = document.getElementById('topActionsSection');
+                if (topActionsSection) {
+                    topActionsSection.style.display = 'grid';
+                }
+                showLoading(false);
+                elements.dayOrderSection.classList.remove('hidden');
+                updateStepIndicator(1);
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showError(error.message || 'Failed to load data. Please try again.');
+                
+                elements.loadingDiv.innerHTML = `
+                    <div class="error-state">
+                        <p style="color: #c33; font-weight: 600;">Error loading data</p>
+                        <p style="color: #666; font-size: 14px; margin-top: 10px;">${error.message}</p>
+                        <button onclick="location.reload()" class="retry-btn">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+
+        elements.logoutBtn.addEventListener('click', handleLogout);
+        elements.viewStudentsBtn.addEventListener('click', handleViewStudents);
+        elements.markAttendanceBtn.addEventListener('click', handleMarkAttendance);
+        elements.backBtn.addEventListener('click', handleBackButton);
+
+        elements.viewPastAttendanceBtn.addEventListener('click', function() {
+            if (!state.selectedDayOrder || !state.selectedDepartment || !state.selectedDepartmentId) {
+                showError('Please select both day order and department');
+                return;
+            }
+            storeSessionData();
+            window.location.href = 'past_attendance.html';
+        });
+
+        elements.studentGroupingBtn.addEventListener('click', function() {
+            if (!state.selectedDayOrder || !state.selectedDepartment || !state.selectedDepartmentId) {
+                showError('Please select both day order and department');
+                return;
+            }
+            storeSessionData();
+            window.location.href = 'assessment_grouping/grouping.html';
+        });
+
+        // Assessment Evaluation button (at top - doesn't need day order/department)
+        const assessmentEvaluationBtn = document.getElementById('assessmentEvaluationBtn');
+        if (assessmentEvaluationBtn) {
+            assessmentEvaluationBtn.addEventListener('click', function() {
+                // Only store trainer data, no day order/department needed
+                sessionStorage.setItem('trainerId', state.currentTrainer.trainer_id);
+                sessionStorage.setItem('trainerName', state.currentTrainer.name);
+                sessionStorage.setItem('trainerVendor', state.currentTrainer.vendor);
+                window.location.href = 'assessment_evaluation/handover.html';
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !elements.departmentSection.classList.contains('hidden')) {
+                handleBackButton();
+            }
+        });
+
+        initialize();
+    </script>
+</body>
+</html>
